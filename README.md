@@ -18,6 +18,7 @@ A powerful **Model Context Protocol (MCP)** server for seamless Figma API integr
 | 🌳 **Nested Children** | Full component tree with all styles preserved |
 | 📸 **Screenshot Export** | PNG, SVG, JPG, PDF formats with scale control |
 | 🔗 **Code Connect** | Map Figma components to code implementations |
+| 📦 **Asset Management** | List, export, and download design assets |
 
 ---
 
@@ -107,10 +108,7 @@ pixelbyte-figma-mcp --help
 
 | Tool | Description | Parameters |
 |------|-------------|------------|
-| `figma_get_design_tokens` | Extract all design tokens | `file_key`, `node_id`, `include_*` flags |
-| `figma_get_colors` | Extract fill, stroke, shadow colors | `file_key`, `node_id`, `include_*` flags |
-| `figma_get_typography` | Extract font styles | `file_key`, `node_id` |
-| `figma_get_spacing` | Extract padding and gap values | `file_key`, `node_id` |
+| `figma_get_design_tokens` | Extract all design tokens with ready-to-use code | `file_key`, `node_id`, `include_*` flags, `include_generated_code` |
 | `figma_get_styles` | Get published styles from file | `file_key`, `include_*` flags |
 
 ### Code Generation Tools
@@ -126,6 +124,14 @@ pixelbyte-figma-mcp --help
 | `figma_get_code_connect_map` | Get stored Code Connect mappings | `file_key`, `node_id` (optional) |
 | `figma_add_code_connect_map` | Add/update a mapping | `file_key`, `node_id`, `component_path`, `component_name`, `props_mapping`, `variants`, `example` |
 | `figma_remove_code_connect_map` | Remove a mapping | `file_key`, `node_id` |
+
+### Asset Management Tools
+
+| Tool | Description | Parameters |
+|------|-------------|------------|
+| `figma_list_assets` | List all exportable assets (images, vectors, exports) | `file_key`, `node_id` (optional), `include_images`, `include_vectors`, `include_exports` |
+| `figma_get_images` | Get actual download URLs for image fills | `file_key`, `node_id` (optional) |
+| `figma_export_assets` | Batch export nodes with SVG generation | `file_key`, `node_ids[]`, `format`, `scale`, `include_svg_for_vectors` |
 
 ---
 
@@ -218,143 +224,97 @@ figma_generate_code(
 
 ## 🎨 Design Token Extraction
 
-Extract design tokens in a structured format for your design system.
+Extract design tokens in a structured format with **ready-to-use CSS, SCSS, and Tailwind code**.
 
-### Colors (with Gradient Support)
-
-```python
-figma_get_colors(
-    file_key="qyFsYyLyBsutXGGzZ9PLCp",
-    node_id="1707:6176",
-    include_fills=True,
-    include_strokes=True,
-    include_shadows=True
-)
-```
-
-**Output:**
-```json
-{
-  "fills": [
-    {
-      "name": "Button Background",
-      "type": "fill",
-      "fillType": "GRADIENT_LINEAR",
-      "gradient": {
-        "type": "LINEAR",
-        "angle": 90,
-        "stops": [
-          {"position": 0, "color": "#3B82F6", "opacity": 1},
-          {"position": 1, "color": "#8B5CF6", "opacity": 1}
-        ]
-      }
-    },
-    {
-      "name": "Card Background",
-      "type": "fill",
-      "fillType": "SOLID",
-      "color": "#FFFFFF",
-      "opacity": 1
-    }
-  ],
-  "strokes": [...],
-  "shadows": [...]
-}
-```
-
-### Typography (Enhanced)
-
-```python
-figma_get_typography(
-    file_key="qyFsYyLyBsutXGGzZ9PLCp",
-    node_id="1707:6176"
-)
-```
-
-**Output:**
-```json
-{
-  "typography": [
-    {
-      "fontFamily": "Inter",
-      "fontSize": 16,
-      "fontWeight": 500,
-      "lineHeight": 24,
-      "letterSpacing": 0,
-      "textCase": "ORIGINAL",
-      "textDecoration": "NONE",
-      "textAlign": "CENTER",
-      "paragraphSpacing": 0
-    }
-  ],
-  "summary": {
-    "fontFamilies": ["Inter", "Roboto"],
-    "fontSizes": [12, 14, 16, 18, 24, 32],
-    "fontWeights": [400, 500, 600, 700]
-  }
-}
-```
-
-### Spacing (with Advanced Layout)
-
-```python
-figma_get_spacing(
-    file_key="qyFsYyLyBsutXGGzZ9PLCp",
-    node_id="1707:6176"
-)
-```
-
-**Output:**
-```json
-{
-  "spacing": [
-    {
-      "name": "Card",
-      "padding": {"top": 24, "right": 24, "bottom": 24, "left": 24},
-      "gap": 16,
-      "layoutMode": "VERTICAL",
-      "primaryAxisAlign": "CENTER",
-      "counterAxisAlign": "CENTER",
-      "layoutWrap": "NO_WRAP"
-    }
-  ],
-  "summary": {
-    "uniquePaddingValues": [8, 12, 16, 24, 32],
-    "uniqueGapValues": [8, 12, 16, 24]
-  }
-}
-```
-
-### Effects (Shadows & Blurs)
+### All-in-One Token Extraction
 
 ```python
 figma_get_design_tokens(
     file_key="qyFsYyLyBsutXGGzZ9PLCp",
     node_id="1707:6176",
-    include_effects=True
+    include_colors=True,
+    include_typography=True,
+    include_spacing=True,
+    include_effects=True,
+    include_generated_code=True  # NEW in v2.0!
 )
 ```
 
 **Output:**
 ```json
 {
-  "shadows": [
-    {
-      "name": "Card Shadow",
-      "type": "DROP_SHADOW",
-      "color": "rgba(0, 0, 0, 0.1)",
-      "offset": {"x": 0, "y": 4},
-      "blur": 12,
-      "spread": 0
+  "$schema": "https://design-tokens.github.io/community-group/format/",
+  "figmaFile": "qyFsYyLyBsutXGGzZ9PLCp",
+  "tokens": {
+    "colors": [
+      {
+        "name": "Button Background",
+        "value": "#3B82F6",
+        "hex": "#3B82F6",
+        "rgb": "59, 130, 246",
+        "hsl": "217, 91%, 60%",
+        "contrast": { "white": 3.02, "black": 6.96 }
+      }
+    ],
+    "typography": [...],
+    "spacing": [...],
+    "shadows": [...],
+    "blurs": [...]
+  },
+  "generated": {
+    "css_variables": ":root {\n  --color-button-background: #3B82F6;\n  ...\n}",
+    "scss_variables": "$color-button-background: #3B82F6;\n...",
+    "tailwind_config": "module.exports = {\n  theme: {\n    extend: {\n      colors: {\n        'button-background': '#3B82F6'\n      }\n    }\n  }\n}"
+  }
+}
+```
+
+### Rich Color Information
+
+Every extracted color now includes:
+
+| Property | Description | Example |
+|----------|-------------|---------|
+| `hex` | Hexadecimal color | `#3B82F6` |
+| `rgb` | RGB values | `59, 130, 246` |
+| `hsl` | HSL values | `217, 91%, 60%` |
+| `contrast.white` | WCAG contrast ratio vs white | `3.02` |
+| `contrast.black` | WCAG contrast ratio vs black | `6.96` |
+
+### Ready-to-Use Generated Code
+
+The `generated` section provides copy-paste ready code:
+
+**CSS Variables:**
+```css
+:root {
+  --color-button-background: #3B82F6;
+  --color-card-bg: #FFFFFF;
+  --font-inter-16: 16px/24px 'Inter';
+  --spacing-card: 24px 24px 24px 24px;
+  --shadow-card: 0px 4px 12px rgba(0, 0, 0, 0.1);
+}
+```
+
+**SCSS Variables:**
+```scss
+$color-button-background: #3B82F6;
+$color-card-bg: #FFFFFF;
+$font-inter-size: 16px;
+$font-inter-weight: 500;
+```
+
+**Tailwind Config:**
+```javascript
+module.exports = {
+  theme: {
+    extend: {
+      colors: {
+        'button-background': '#3B82F6',
+        'card-bg': '#FFFFFF'
+      }
     }
-  ],
-  "blurs": [
-    {
-      "name": "Glass Effect",
-      "type": "BACKGROUND_BLUR",
-      "radius": 20
-    }
-  ]
+  }
 }
 ```
 
@@ -523,24 +483,126 @@ https://www.figma.com/design/qyFsYyLyBsutXGGzZ9PLCp/My-Design
 
 ---
 
-## 🆕 What's New in v1.2.0
+## 🆕 What's New in v2.2.0
 
-### Enhanced Design Extraction
-- **Gradient Support**: Linear, radial, angular, and diamond gradients
-- **Individual Corner Radii**: Per-corner border-radius support
-- **Transform Properties**: Rotation and scale extraction
-- **Blend Modes**: Full blend mode support (multiply, screen, overlay, etc.)
-- **Advanced Effects**: Layer blur and background blur support
-- **Multiple Shadows**: Support for multiple drop and inner shadows
+### 📦 Asset Management System
+Three new tools for comprehensive asset handling:
 
-### New Tool
-- **`figma_get_styles`**: Fetch published styles (fill, text, effect, grid) from Figma files
+**`figma_list_assets`** - Catalog all exportable assets in your design:
+```python
+figma_list_assets(
+    file_key="qyFsYyLyBsutXGGzZ9PLCp",
+    node_id="1707:6176",  # Optional: search within specific node
+    include_images=True,
+    include_vectors=True,
+    include_exports=True
+)
+```
+Returns categorized list of:
+- Image fills (photos, illustrations with `imageRef`)
+- Vector/icon nodes (SVG exportable shapes)
+- Nodes with export settings configured
 
-### Improved Code Generation
-- All 10 frameworks now support gradients, transforms, and advanced effects
-- Better alignment and layout handling
-- SwiftUI custom corner shape generation
-- Kotlin Compose brush definitions for gradients
+**`figma_get_images`** - Get actual download URLs for image fills:
+```python
+figma_get_images(
+    file_key="qyFsYyLyBsutXGGzZ9PLCp",
+    node_id="1707:6176"  # Optional: filter to specific node
+)
+```
+Resolves internal `imageRef` values to real S3 URLs (valid for 30 days).
+
+**`figma_export_assets`** - Batch export with SVG generation:
+```python
+figma_export_assets(
+    file_key="qyFsYyLyBsutXGGzZ9PLCp",
+    node_ids=["1:2", "1:3", "1:4"],
+    format="png",  # png, svg, jpg, pdf
+    scale=2.0,
+    include_svg_for_vectors=True  # Generate inline SVG from path data
+)
+```
+Returns download URLs + generated SVG markup for vector nodes.
+
+### 🎨 SVG Generation from Path Data
+New helper function generates complete SVG from vector geometry:
+- Uses `fillGeometry` and `strokeGeometry` path data
+- Preserves fill and stroke colors
+- Correct viewBox based on node bounds
+- Works with VECTOR, STAR, POLYGON, ELLIPSE, LINE nodes
+
+### 🔧 New Helper Functions
+| Function | Description |
+|----------|-------------|
+| `_resolve_image_urls()` | Convert imageRef to actual S3 URLs |
+| `_generate_svg_from_paths()` | Create SVG from vector path geometry |
+| `_collect_all_assets()` | Recursively find all assets in node tree |
+
+---
+
+## What's New in v2.1.0
+
+### 🎯 Enhanced Code Generation
+- **textCase → CSS**: `UPPER`, `LOWER`, `TITLE` now generate `text-transform` properties
+- **Hyperlinks**: Text hyperlinks generate proper `<a>` tags in React/Vue/HTML
+- **Line Clamp**: `maxLines` generates `-webkit-line-clamp` CSS for text truncation
+- **Paragraph Spacing**: `paragraphSpacing` generates `margin-bottom` on text blocks
+- **Flex Grow**: `layoutGrow` generates `flex-grow` for flexible layouts
+- **Multiple Fills**: Layered backgrounds now generate comma-separated CSS backgrounds
+
+### 📦 New Extractions
+- **Render Bounds**: `absoluteRenderBounds` for actual visual bounds including effects
+- **Export Settings**: Format, scale, and SVG options for export configurations
+- **Mask Data**: `isMask`, `maskType`, and `clipsContent` for masking behavior
+- **Interactions**: Prototype triggers, actions, transitions for hover/click states
+- **Vector Paths**: `fillGeometry`, `strokeGeometry` for SVG export
+- **Image References**: Image fill refs with API URL hints for resolution
+
+### 🧩 Component Intelligence
+- **Variant Properties**: Full variant info for component instances
+- **Main Component**: Source component tracking with `mainComponent` details
+- **Component Set Name**: Context for variant components
+
+### 🚀 Implementation Hints
+AI-friendly guidance automatically generated:
+- Layout suggestions (flexbox direction, grid recommendations)
+- Responsive hints (breakpoint suggestions, scaling guidance)
+- Interaction hints (hover states, click navigation)
+- Component hints (variant usage, exposed props)
+
+### ♿ Accessibility Checks
+Automatic WCAG compliance warnings:
+- **Contrast Issues**: Low contrast text detection with contrast ratios
+- **Touch Targets**: Small interactive element warnings (< 44px)
+- **Label Warnings**: Missing aria-label on icon-only buttons
+
+---
+
+## What's New in v2.0.0
+
+### ⚠️ Breaking Changes
+- **Removed Tools**: `figma_get_colors`, `figma_get_typography`, `figma_get_spacing` have been removed
+- **Use Instead**: `figma_get_design_tokens` now provides all these features in one unified tool
+
+### Rich Color Information
+- **RGB Values**: Every color now includes RGB string (`59, 130, 246`)
+- **HSL Values**: HSL color representation (`217, 91%, 60%`)
+- **WCAG Contrast Ratios**: Automatic contrast calculation against white and black backgrounds
+
+### Ready-to-Use Code Generation
+- **CSS Variables**: Complete `:root` block with all design tokens
+- **SCSS Variables**: SCSS variable definitions for colors, typography, spacing
+- **Tailwind Config**: Ready-to-paste Tailwind theme extension
+
+### API Optimizations
+- **Faster `figma_get_styles`**: Reduced from 2 API calls to 1 for improved performance
+- **Optimized Node Fetching**: Style enrichment now fetches only required nodes
+
+### Previous Features (v1.2.0)
+- Gradient support (linear, radial, angular, diamond)
+- Transform properties (rotation, scale)
+- Advanced effects (layer blur, background blur)
+- Multiple shadow support
 
 ---
 

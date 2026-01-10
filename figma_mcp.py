@@ -195,6 +195,10 @@ class FigmaDesignTokensInput(BaseModel):
     include_typography: bool = Field(default=True, description="Include typography tokens")
     include_spacing: bool = Field(default=True, description="Include spacing/padding tokens")
     include_effects: bool = Field(default=True, description="Include shadow/blur effects")
+    include_generated_code: bool = Field(
+        default=True,
+        description="Include ready-to-use CSS variables, SCSS variables, and Tailwind config"
+    )
 
     @field_validator('file_key')
     @classmethod
@@ -234,84 +238,6 @@ class FigmaCodeGenInput(BaseModel):
     @classmethod
     def normalize_node_id(cls, v: str) -> str:
         return v.replace('-', ':')
-
-
-class FigmaColorsInput(BaseModel):
-    """Input model for color extraction."""
-    model_config = ConfigDict(str_strip_whitespace=True, validate_assignment=True)
-
-    file_key: str = Field(..., description="Figma file key", min_length=10, max_length=50)
-    node_id: Optional[str] = Field(
-        default=None,
-        description="Optional node ID to extract colors from specific component"
-    )
-    include_fills: bool = Field(default=True, description="Include fill colors")
-    include_strokes: bool = Field(default=True, description="Include stroke colors")
-    include_shadows: bool = Field(default=True, description="Include shadow colors")
-
-    @field_validator('file_key')
-    @classmethod
-    def validate_file_key(cls, v: str) -> str:
-        if 'figma.com' in v:
-            match = re.search(r'figma\.com/(?:design|file)/([a-zA-Z0-9]+)', v)
-            if match:
-                return match.group(1)
-        return v
-
-    @field_validator('node_id')
-    @classmethod
-    def normalize_node_id(cls, v: Optional[str]) -> Optional[str]:
-        return v.replace('-', ':') if v else None
-
-
-class FigmaTypographyInput(BaseModel):
-    """Input model for typography extraction."""
-    model_config = ConfigDict(str_strip_whitespace=True, validate_assignment=True)
-
-    file_key: str = Field(..., description="Figma file key", min_length=10, max_length=50)
-    node_id: Optional[str] = Field(
-        default=None,
-        description="Optional node ID to extract typography from specific component"
-    )
-
-    @field_validator('file_key')
-    @classmethod
-    def validate_file_key(cls, v: str) -> str:
-        if 'figma.com' in v:
-            match = re.search(r'figma\.com/(?:design|file)/([a-zA-Z0-9]+)', v)
-            if match:
-                return match.group(1)
-        return v
-
-    @field_validator('node_id')
-    @classmethod
-    def normalize_node_id(cls, v: Optional[str]) -> Optional[str]:
-        return v.replace('-', ':') if v else None
-
-
-class FigmaSpacingInput(BaseModel):
-    """Input model for spacing extraction."""
-    model_config = ConfigDict(str_strip_whitespace=True, validate_assignment=True)
-
-    file_key: str = Field(..., description="Figma file key", min_length=10, max_length=50)
-    node_id: Optional[str] = Field(
-        default=None,
-        description="Optional node ID to extract spacing from specific component"
-    )
-
-    @field_validator('file_key')
-    @classmethod
-    def validate_file_key(cls, v: str) -> str:
-        if 'figma.com' in v:
-            match = re.search(r'figma\.com/(?:design|file)/([a-zA-Z0-9]+)', v)
-            if match:
-                return match.group(1)
-        return v
-
-    @field_validator('node_id')
-    @classmethod
-    def normalize_node_id(cls, v: Optional[str]) -> Optional[str]:
-        return v.replace('-', ':') if v else None
 
 
 class FigmaStylesInput(BaseModel):
@@ -478,6 +404,132 @@ class FigmaCodeConnectRemoveInput(BaseModel):
         return v.replace('-', ':')
 
 
+class FigmaListAssetsInput(BaseModel):
+    """Input model for listing assets in a Figma file/node."""
+    model_config = ConfigDict(str_strip_whitespace=True, validate_assignment=True)
+
+    file_key: str = Field(
+        ...,
+        description="Figma file key",
+        min_length=10,
+        max_length=50
+    )
+    node_id: Optional[str] = Field(
+        default=None,
+        description="Optional node ID to search within (searches entire file if not provided)"
+    )
+    include_images: bool = Field(
+        default=True,
+        description="Include image fills in results"
+    )
+    include_vectors: bool = Field(
+        default=True,
+        description="Include vector/icon nodes in results"
+    )
+    include_exports: bool = Field(
+        default=True,
+        description="Include nodes with export settings"
+    )
+    response_format: ResponseFormat = Field(
+        default=ResponseFormat.MARKDOWN,
+        description="Output format"
+    )
+
+    @field_validator('file_key')
+    @classmethod
+    def validate_file_key(cls, v: str) -> str:
+        if 'figma.com' in v:
+            match = re.search(r'figma\.com/(?:design|file)/([a-zA-Z0-9]+)', v)
+            if match:
+                return match.group(1)
+        return v
+
+    @field_validator('node_id')
+    @classmethod
+    def normalize_node_id(cls, v: Optional[str]) -> Optional[str]:
+        if v:
+            return v.replace('-', ':')
+        return v
+
+
+class FigmaGetImagesInput(BaseModel):
+    """Input model for getting image fill URLs."""
+    model_config = ConfigDict(str_strip_whitespace=True, validate_assignment=True)
+
+    file_key: str = Field(
+        ...,
+        description="Figma file key",
+        min_length=10,
+        max_length=50
+    )
+    node_id: Optional[str] = Field(
+        default=None,
+        description="Optional node ID to get images from"
+    )
+
+    @field_validator('file_key')
+    @classmethod
+    def validate_file_key(cls, v: str) -> str:
+        if 'figma.com' in v:
+            match = re.search(r'figma\.com/(?:design|file)/([a-zA-Z0-9]+)', v)
+            if match:
+                return match.group(1)
+        return v
+
+    @field_validator('node_id')
+    @classmethod
+    def normalize_node_id(cls, v: Optional[str]) -> Optional[str]:
+        if v:
+            return v.replace('-', ':')
+        return v
+
+
+class FigmaExportAssetsInput(BaseModel):
+    """Input model for batch asset export."""
+    model_config = ConfigDict(str_strip_whitespace=True, validate_assignment=True)
+
+    file_key: str = Field(
+        ...,
+        description="Figma file key",
+        min_length=10,
+        max_length=50
+    )
+    node_ids: List[str] = Field(
+        ...,
+        description="List of node IDs to export",
+        min_length=1,
+        max_length=50
+    )
+    format: ImageFormat = Field(
+        default=ImageFormat.PNG,
+        description="Export format: png, svg, jpg, pdf"
+    )
+    scale: float = Field(
+        default=2.0,
+        description="Scale factor (0.01 to 4.0)",
+        ge=0.01,
+        le=4.0
+    )
+    include_svg_for_vectors: bool = Field(
+        default=True,
+        description="Generate inline SVG for vector nodes"
+    )
+
+    @field_validator('file_key')
+    @classmethod
+    def validate_file_key(cls, v: str) -> str:
+        if 'figma.com' in v:
+            match = re.search(r'figma\.com/(?:design|file)/([a-zA-Z0-9]+)', v)
+            if match:
+                return match.group(1)
+        return v
+
+    @field_validator('node_ids')
+    @classmethod
+    def normalize_node_ids(cls, v: List[str]) -> List[str]:
+        return [nid.replace('-', ':') for nid in v]
+
+
 # ============================================================================
 # Helper Functions
 # ============================================================================
@@ -581,6 +633,62 @@ def _rgba_to_hex(color: Dict[str, float]) -> str:
     return f"#{r:02x}{g:02x}{b:02x}"
 
 
+def _hex_to_rgb(hex_color: str) -> tuple:
+    """Convert hex color to RGB tuple (0-255 values)."""
+    # Handle rgba format
+    if hex_color.startswith('rgba'):
+        import re
+        match = re.match(r'rgba\((\d+),\s*(\d+),\s*(\d+)', hex_color)
+        if match:
+            return (int(match.group(1)), int(match.group(2)), int(match.group(3)))
+        return (0, 0, 0)
+
+    hex_color = hex_color.lstrip('#')
+    if len(hex_color) == 3:
+        hex_color = ''.join([c*2 for c in hex_color])
+    if len(hex_color) != 6:
+        return (0, 0, 0)
+    return tuple(int(hex_color[i:i+2], 16) for i in (0, 2, 4))
+
+
+def _rgb_to_hsl(r: int, g: int, b: int) -> tuple:
+    """Convert RGB (0-255) to HSL (h: 0-360, s: 0-100, l: 0-100)."""
+    r, g, b = r / 255, g / 255, b / 255
+    max_c, min_c = max(r, g, b), min(r, g, b)
+    l = (max_c + min_c) / 2
+
+    if max_c == min_c:
+        h = s = 0
+    else:
+        d = max_c - min_c
+        s = d / (2 - max_c - min_c) if l > 0.5 else d / (max_c + min_c)
+        if max_c == r:
+            h = (g - b) / d + (6 if g < b else 0)
+        elif max_c == g:
+            h = (b - r) / d + 2
+        else:
+            h = (r - g) / d + 4
+        h /= 6
+
+    return (round(h * 360), round(s * 100), round(l * 100))
+
+
+def _calculate_luminance(r: int, g: int, b: int) -> float:
+    """Calculate relative luminance for WCAG contrast ratio (0-255 RGB values)."""
+    def adjust(c: int) -> float:
+        c = c / 255
+        return c / 12.92 if c <= 0.03928 else ((c + 0.055) / 1.055) ** 2.4
+    return 0.2126 * adjust(r) + 0.7152 * adjust(g) + 0.0722 * adjust(b)
+
+
+def _contrast_ratio(color1_rgb: tuple, color2_rgb: tuple) -> float:
+    """Calculate WCAG contrast ratio between two colors (RGB tuples 0-255)."""
+    l1 = _calculate_luminance(*color1_rgb)
+    l2 = _calculate_luminance(*color2_rgb)
+    lighter, darker = max(l1, l2), min(l1, l2)
+    return round((lighter + 0.05) / (darker + 0.05), 2)
+
+
 def _calculate_gradient_angle(handle_positions: List[Dict[str, float]]) -> float:
     """Calculate gradient angle from Figma handle positions."""
     if not handle_positions or len(handle_positions) < 2:
@@ -629,7 +737,20 @@ def _extract_fill_data(fill: Dict[str, Any], node_name: str) -> Optional[Dict[st
 
     if fill_type == 'SOLID':
         color = fill.get('color', {})
-        base_data['color'] = _rgba_to_hex(color)
+        hex_color = _rgba_to_hex(color)
+        base_data['hex'] = hex_color
+
+        # Add rich color information for solid colors
+        rgb = _hex_to_rgb(hex_color)
+        hsl = _rgb_to_hsl(*rgb)
+        base_data['rgb'] = f"{rgb[0]}, {rgb[1]}, {rgb[2]}"
+        base_data['hsl'] = f"{hsl[0]}, {hsl[1]}%, {hsl[2]}%"
+        base_data['contrast'] = {
+            'white': _contrast_ratio(rgb, (255, 255, 255)),
+            'black': _contrast_ratio(rgb, (0, 0, 0))
+        }
+        # Keep 'color' for backward compatibility
+        base_data['color'] = hex_color
 
     elif fill_type in ['GRADIENT_LINEAR', 'GRADIENT_RADIAL', 'GRADIENT_ANGULAR', 'GRADIENT_DIAMOND']:
         gradient_stops = fill.get('gradientStops', [])
@@ -674,7 +795,18 @@ def _extract_stroke_data(node: Dict[str, Any]) -> Optional[Dict[str, Any]]:
             }
 
             if stroke_type == 'SOLID':
-                stroke_data['color'] = _rgba_to_hex(stroke.get('color', {}))
+                hex_color = _rgba_to_hex(stroke.get('color', {}))
+                stroke_data['hex'] = hex_color
+                stroke_data['color'] = hex_color
+                # Add rich color information
+                rgb = _hex_to_rgb(hex_color)
+                hsl = _rgb_to_hsl(*rgb)
+                stroke_data['rgb'] = f"{rgb[0]}, {rgb[1]}, {rgb[2]}"
+                stroke_data['hsl'] = f"{hsl[0]}, {hsl[1]}%, {hsl[2]}%"
+                stroke_data['contrast'] = {
+                    'white': _contrast_ratio(rgb, (255, 255, 255)),
+                    'black': _contrast_ratio(rgb, (0, 0, 0))
+                }
             elif stroke_type.startswith('GRADIENT_'):
                 stroke_data['gradient'] = {
                     'type': stroke_type.replace('GRADIENT_', ''),
@@ -749,27 +881,57 @@ def _extract_transform(node: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def _extract_component_info(node: Dict[str, Any]) -> Optional[Dict[str, Any]]:
-    """Extract component/instance information."""
+    """Extract component/instance information with full variant details."""
     node_type = node.get('type', '')
 
     if node_type == 'INSTANCE':
-        return {
+        result = {
             'isInstance': True,
             'componentId': node.get('componentId'),
             'componentProperties': node.get('componentProperties', {}),
             'overrides': node.get('overrides', []),
             'exposedInstances': node.get('exposedInstances', [])
         }
+
+        # Add variant properties if this is a variant instance
+        variant_props = node.get('variantProperties')
+        if variant_props:
+            result['variantProperties'] = variant_props
+
+        # Add main component info if available (for tracking source component)
+        main_component = node.get('mainComponent')
+        if main_component and isinstance(main_component, dict):
+            result['mainComponent'] = {
+                'id': main_component.get('id'),
+                'name': main_component.get('name'),
+                'componentSetId': main_component.get('componentSetId')
+            }
+
+        # Add component set name for variant context
+        if node.get('componentSetName'):
+            result['componentSetName'] = node.get('componentSetName')
+
+        return result
+
     elif node_type == 'COMPONENT':
-        return {
+        result = {
             'isComponent': True,
             'componentPropertyDefinitions': node.get('componentPropertyDefinitions', {}),
             'componentSetId': node.get('componentSetId')
         }
+
+        # Add variant properties if this component is a variant
+        variant_props = node.get('variantProperties')
+        if variant_props:
+            result['variantProperties'] = variant_props
+
+        return result
+
     elif node_type == 'COMPONENT_SET':
         return {
             'isComponentSet': True,
-            'componentPropertyDefinitions': node.get('componentPropertyDefinitions', {})
+            'componentPropertyDefinitions': node.get('componentPropertyDefinitions', {}),
+            'variantGroupProperties': node.get('variantGroupProperties', {})
         }
 
     return None
@@ -798,6 +960,376 @@ def _extract_bound_variables(node: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     return extracted if extracted else None
 
 
+def _extract_mask_data(node: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """Extract mask information from a node.
+
+    Returns mask configuration if the node is a mask.
+    """
+    if not node.get('isMask'):
+        return None
+
+    return {
+        'isMask': True,
+        'maskType': node.get('maskType', 'ALPHA'),  # ALPHA, VECTOR, LUMINANCE
+        'clipsContent': node.get('clipsContent', False)
+    }
+
+
+def _extract_image_references(node: Dict[str, Any], file_key: str = '') -> Optional[List[Dict[str, Any]]]:
+    """Extract image references from node fills.
+
+    Returns image reference information that can be resolved to actual URLs
+    using the Figma /images endpoint.
+    """
+    fills = node.get('fills', [])
+    if not fills:
+        return None
+
+    images = []
+    for fill in fills:
+        if fill.get('type') == 'IMAGE' and fill.get('visible', True):
+            image_ref = fill.get('imageRef')
+            if image_ref:
+                image_info = {
+                    'imageRef': image_ref,
+                    'scaleMode': fill.get('scaleMode', 'FILL'),  # FILL, FIT, TILE, STRETCH
+                    'opacity': fill.get('opacity', 1),
+                }
+
+                # Image transform for rotation/scale
+                if fill.get('imageTransform'):
+                    image_info['imageTransform'] = fill.get('imageTransform')
+
+                # Scaling factor
+                if fill.get('scalingFactor'):
+                    image_info['scalingFactor'] = fill.get('scalingFactor')
+
+                # Rotation
+                if fill.get('rotation'):
+                    image_info['rotation'] = fill.get('rotation')
+
+                # Filters (exposure, contrast, saturation, etc.)
+                filters = fill.get('filters', {})
+                if filters:
+                    image_info['filters'] = filters
+
+                # URL hint for fetching via Figma API
+                if file_key:
+                    image_info['apiUrlHint'] = f"/v1/files/{file_key}/images"
+
+                images.append(image_info)
+
+    return images if images else None
+
+
+async def _resolve_image_urls(file_key: str, image_refs: List[str]) -> Dict[str, str]:
+    """Resolve Figma image references to actual downloadable URLs.
+
+    Uses the Figma /images endpoint to convert internal imageRef values
+    to real S3 URLs that can be downloaded (valid for 30 days).
+
+    Args:
+        file_key: Figma file key
+        image_refs: List of imageRef values to resolve
+
+    Returns:
+        Dict mapping imageRef to actual URL
+    """
+    if not image_refs:
+        return {}
+
+    try:
+        # Use the /images endpoint with image refs
+        data = await _make_figma_request(
+            f"files/{file_key}/images"
+        )
+
+        # The response contains a mapping of imageRef -> URL
+        images = data.get('meta', {}).get('images', {})
+        return images
+    except Exception:
+        return {}
+
+
+def _generate_svg_from_paths(vector_paths: Dict[str, Any], node: Dict[str, Any]) -> Optional[str]:
+    """Generate SVG markup from vector path geometry.
+
+    Creates a complete SVG element from fillGeometry and strokeGeometry data.
+
+    Args:
+        vector_paths: Vector path data from _extract_vector_paths()
+        node: The node dict containing fill/stroke colors and bounds
+
+    Returns:
+        Complete SVG string or None if no valid paths
+    """
+    fill_geometry = vector_paths.get('fillGeometry', [])
+    stroke_geometry = vector_paths.get('strokeGeometry', [])
+
+    if not fill_geometry and not stroke_geometry:
+        return None
+
+    # Get bounding box for viewBox
+    bbox = node.get('absoluteBoundingBox', {})
+    width = bbox.get('width', 24)
+    height = bbox.get('height', 24)
+
+    # Get fill color
+    fill_color = '#000000'
+    fills = node.get('fills', [])
+    for fill in fills:
+        if fill.get('type') == 'SOLID' and fill.get('visible', True):
+            color = fill.get('color', {})
+            r = int(color.get('r', 0) * 255)
+            g = int(color.get('g', 0) * 255)
+            b = int(color.get('b', 0) * 255)
+            fill_color = f'#{r:02x}{g:02x}{b:02x}'
+            break
+
+    # Get stroke color
+    stroke_color = 'none'
+    stroke_width = 0
+    strokes = node.get('strokes', [])
+    for stroke in strokes:
+        if stroke.get('type') == 'SOLID' and stroke.get('visible', True):
+            color = stroke.get('color', {})
+            r = int(color.get('r', 0) * 255)
+            g = int(color.get('g', 0) * 255)
+            b = int(color.get('b', 0) * 255)
+            stroke_color = f'#{r:02x}{g:02x}{b:02x}'
+            stroke_width = node.get('strokeWeight', 1)
+            break
+
+    # Build SVG
+    svg_parts = [
+        f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {width:.0f} {height:.0f}" width="{width:.0f}" height="{height:.0f}">'
+    ]
+
+    # Add fill paths
+    for geom in fill_geometry:
+        path_data = geom.get('path', '')
+        if path_data:
+            svg_parts.append(f'  <path d="{path_data}" fill="{fill_color}" />')
+
+    # Add stroke paths
+    for geom in stroke_geometry:
+        path_data = geom.get('path', '')
+        if path_data:
+            svg_parts.append(f'  <path d="{path_data}" fill="none" stroke="{stroke_color}" stroke-width="{stroke_width}" />')
+
+    svg_parts.append('</svg>')
+    return '\n'.join(svg_parts)
+
+
+def _collect_all_assets(node: Dict[str, Any], file_key: str, assets: Dict[str, List]) -> None:
+    """Recursively collect all assets from a node tree.
+
+    Finds image fills, vectors, and nodes with export settings.
+
+    Args:
+        node: The node to process
+        file_key: Figma file key
+        assets: Dict to accumulate assets into (modified in place)
+    """
+    node_id = node.get('id', '')
+    node_name = node.get('name', 'Unnamed')
+    node_type = node.get('type', '')
+
+    # Check for image fills
+    image_refs = _extract_image_references(node, file_key)
+    if image_refs:
+        for img in image_refs:
+            assets['images'].append({
+                'nodeId': node_id,
+                'nodeName': node_name,
+                'imageRef': img.get('imageRef'),
+                'scaleMode': img.get('scaleMode'),
+                'filters': img.get('filters')
+            })
+
+    # Check for vector paths (SVG exportable)
+    vector_paths = _extract_vector_paths(node)
+    if vector_paths:
+        assets['vectors'].append({
+            'nodeId': node_id,
+            'nodeName': node_name,
+            'nodeType': node_type,
+            'hasPath': bool(vector_paths.get('fillGeometry') or vector_paths.get('strokeGeometry'))
+        })
+
+    # Check for export settings
+    export_settings = _extract_export_settings(node)
+    if export_settings:
+        assets['exports'].append({
+            'nodeId': node_id,
+            'nodeName': node_name,
+            'settings': export_settings
+        })
+
+    # Recurse into children
+    for child in node.get('children', []):
+        _collect_all_assets(child, file_key, assets)
+
+
+def _extract_vector_paths(node: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """Extract vector path data for SVG export.
+
+    Returns path geometry for vector nodes that can be used to generate SVG.
+    """
+    vector_types = ['VECTOR', 'BOOLEAN_OPERATION', 'STAR', 'POLYGON', 'ELLIPSE', 'LINE', 'REGULAR_POLYGON']
+    if node.get('type') not in vector_types:
+        return None
+
+    result = {}
+
+    # Fill geometry (SVG path data for fills)
+    fill_geometry = node.get('fillGeometry', [])
+    if fill_geometry:
+        result['fillGeometry'] = fill_geometry
+
+    # Stroke geometry (SVG path data for strokes)
+    stroke_geometry = node.get('strokeGeometry', [])
+    if stroke_geometry:
+        result['strokeGeometry'] = stroke_geometry
+
+    # Vector network (vertices and segments for complex paths)
+    vector_network = node.get('vectorNetwork')
+    if vector_network:
+        result['vectorNetwork'] = {
+            'vertices': vector_network.get('vertices', []),
+            'segments': vector_network.get('segments', []),
+            'regions': vector_network.get('regions', [])
+        }
+
+    # Boolean operation type for BOOLEAN_OPERATION nodes
+    if node.get('type') == 'BOOLEAN_OPERATION':
+        result['booleanOperation'] = node.get('booleanOperation')  # UNION, INTERSECT, SUBTRACT, EXCLUDE
+
+    # Star-specific properties
+    if node.get('type') == 'STAR':
+        result['starInnerRadius'] = node.get('starInnerRadius')
+
+    # Polygon count
+    if node.get('type') in ['STAR', 'POLYGON', 'REGULAR_POLYGON']:
+        result['pointCount'] = node.get('pointCount')
+
+    # Arc data for ellipses
+    if node.get('type') == 'ELLIPSE':
+        arc_data = node.get('arcData')
+        if arc_data:
+            result['arcData'] = arc_data
+
+    return result if result else None
+
+
+def _extract_interactions(node: Dict[str, Any]) -> Optional[List[Dict[str, Any]]]:
+    """Extract prototype interactions for hover/click states.
+
+    Returns interaction configurations including triggers and actions.
+    Useful for AI to understand hover, click, and other interactive behaviors.
+    """
+    interactions = node.get('interactions', [])
+    if not interactions:
+        return None
+
+    extracted = []
+    for i in interactions:
+        trigger = i.get('trigger', {})
+        action = i.get('action', {})
+
+        interaction = {
+            'trigger': {
+                'type': trigger.get('type'),  # ON_CLICK, ON_HOVER, ON_PRESS, ON_DRAG, AFTER_TIMEOUT, MOUSE_ENTER, MOUSE_LEAVE, MOUSE_UP, MOUSE_DOWN
+            }
+        }
+
+        # Add timeout for AFTER_TIMEOUT trigger
+        if trigger.get('type') == 'AFTER_TIMEOUT':
+            interaction['trigger']['timeout'] = trigger.get('timeout')
+
+        # Add delay if specified
+        if trigger.get('delay'):
+            interaction['trigger']['delay'] = trigger.get('delay')
+
+        # Action details
+        interaction['action'] = {
+            'type': action.get('type'),  # NAVIGATE, OVERLAY, SCROLL_TO, URL, BACK, CLOSE, OPEN_URL, SET_VARIABLE
+        }
+
+        # Destination node for navigation actions
+        if action.get('destinationId'):
+            interaction['action']['destinationId'] = action.get('destinationId')
+
+        # Navigation type
+        if action.get('navigation'):
+            interaction['action']['navigation'] = action.get('navigation')  # NAVIGATE, SWAP, OVERLAY, SCROLL_TO, SWAP_OVERLAY
+
+        # URL for OPEN_URL action
+        if action.get('url'):
+            interaction['action']['url'] = action.get('url')
+
+        # Transition configuration
+        transition = action.get('transition', {})
+        if transition:
+            interaction['action']['transition'] = {
+                'type': transition.get('type'),  # INSTANT, DISSOLVE, SMART_ANIMATE, MOVE_IN, MOVE_OUT, PUSH, SLIDE_IN, SLIDE_OUT
+                'duration': transition.get('duration'),  # milliseconds
+                'easing': transition.get('easing', {}).get('type') if isinstance(transition.get('easing'), dict) else transition.get('easing')
+            }
+
+        # Overlay positioning for overlay actions
+        if action.get('overlayRelativePosition'):
+            interaction['action']['overlayPosition'] = action.get('overlayRelativePosition')
+
+        extracted.append(interaction)
+
+    return extracted if extracted else None
+
+
+def _extract_export_settings(node: Dict[str, Any]) -> Optional[List[Dict[str, Any]]]:
+    """Extract export settings from a node.
+
+    Returns export configurations including format, scale, and SVG options.
+    """
+    settings = node.get('exportSettings', [])
+    if not settings:
+        return None
+
+    extracted = []
+    for s in settings:
+        export_config = {
+            'format': s.get('format'),  # PNG, SVG, JPG, PDF
+            'suffix': s.get('suffix', ''),
+        }
+
+        # Constraint (scale, width, height)
+        constraint = s.get('constraint', {})
+        if constraint:
+            export_config['constraint'] = {
+                'type': constraint.get('type'),  # SCALE, WIDTH, HEIGHT
+                'value': constraint.get('value')
+            }
+
+        # SVG-specific options
+        if s.get('format') == 'SVG':
+            export_config['svgOptions'] = {
+                'includeId': s.get('svgIncludeId', False),
+                'simplifyStroke': s.get('svgSimplifyStroke', False),
+                'outlineText': s.get('svgOutlineText', False)
+            }
+
+        # Image-specific options
+        if s.get('format') in ('PNG', 'JPG'):
+            if s.get('contentsOnly') is not None:
+                export_config['contentsOnly'] = s.get('contentsOnly')
+            if s.get('useAbsoluteBounds') is not None:
+                export_config['useAbsoluteBounds'] = s.get('useAbsoluteBounds')
+
+        extracted.append(export_config)
+
+    return extracted if extracted else None
+
+
 def _extract_effects_data(node: Dict[str, Any]) -> Dict[str, Any]:
     """Extract all effects (shadows, blurs) from a node."""
     effects = node.get('effects', [])
@@ -814,9 +1346,19 @@ def _extract_effects_data(node: Dict[str, Any]) -> Dict[str, Any]:
         if effect_type in ['DROP_SHADOW', 'INNER_SHADOW']:
             color = effect.get('color', {})
             offset = effect.get('offset', {'x': 0, 'y': 0})
+            hex_color = _rgba_to_hex(color)
+            rgb = _hex_to_rgb(hex_color)
+            hsl = _rgb_to_hsl(*rgb)
             shadows.append({
                 'type': effect_type,
-                'color': _rgba_to_hex(color),
+                'hex': hex_color,
+                'color': hex_color,
+                'rgb': f"{rgb[0]}, {rgb[1]}, {rgb[2]}",
+                'hsl': f"{hsl[0]}, {hsl[1]}%, {hsl[2]}%",
+                'contrast': {
+                    'white': _contrast_ratio(rgb, (255, 255, 255)),
+                    'black': _contrast_ratio(rgb, (0, 0, 0))
+                },
                 'offset': {
                     'x': offset.get('x', 0),
                     'y': offset.get('y', 0)
@@ -877,6 +1419,256 @@ def _extract_size_constraints(node: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         constraints['maxHeight'] = node['maxHeight']
 
     return constraints if constraints else None
+
+
+def _generate_implementation_hints(node: Dict[str, Any], interactions: Optional[List] = None) -> Dict[str, Any]:
+    """Generate AI-friendly implementation hints based on node analysis.
+
+    Provides guidance for layout, responsiveness, interactions, accessibility,
+    and component usage.
+    """
+    hints: Dict[str, Any] = {}
+    layout_hints = []
+    responsive_hints = []
+    interaction_hints = []
+    accessibility_hints = []
+    component_hints = []
+
+    node_type = node.get('type', '')
+    node_name = node.get('name', '')
+    layout_mode = node.get('layoutMode')
+
+    # Layout hints
+    if layout_mode:
+        direction = 'row' if layout_mode == 'HORIZONTAL' else 'column'
+        layout_hints.append(f"Use flexbox with flex-direction: {direction}")
+
+        # Check for wrapping
+        if node.get('layoutWrap') == 'WRAP':
+            layout_hints.append("Enable flex-wrap for responsive wrapping")
+
+        # Check for alignment
+        primary_align = node.get('primaryAxisAlignItems', 'MIN')
+        counter_align = node.get('counterAxisAlignItems', 'MIN')
+        if primary_align == 'SPACE_BETWEEN':
+            layout_hints.append("Use justify-content: space-between for distributed spacing")
+        elif primary_align == 'CENTER':
+            layout_hints.append("Center items along main axis")
+        if counter_align == 'CENTER':
+            layout_hints.append("Center items along cross axis")
+
+    # Check for grid-like layouts (multiple children with same size)
+    children = node.get('children', [])
+    if len(children) >= 3:
+        child_widths = [c.get('absoluteBoundingBox', {}).get('width', 0) for c in children if c.get('absoluteBoundingBox')]
+        if child_widths and len(set(round(w) for w in child_widths)) == 1:
+            layout_hints.append(f"Consider CSS Grid with {len(children)}-column layout")
+
+    # Responsive hints based on size
+    bbox = node.get('absoluteBoundingBox', {})
+    width = bbox.get('width', 0)
+    if width > 1200:
+        responsive_hints.append("Large container - consider max-width constraint for readability")
+    if width > 768:
+        responsive_hints.append("Below 768px: Consider stacking layout vertically")
+
+    # Check for percentage-based constraints
+    constraints = node.get('constraints', {})
+    if constraints.get('horizontal') == 'SCALE':
+        responsive_hints.append("Width scales with parent - use percentage or flex-grow")
+    if constraints.get('vertical') == 'SCALE':
+        responsive_hints.append("Height scales with parent - use percentage or flex-grow")
+
+    # Interaction hints
+    if interactions:
+        for interaction in interactions:
+            trigger = interaction.get('trigger', {}).get('type', '')
+            action = interaction.get('action', {})
+            action_type = action.get('type', '')
+            transition = action.get('transition', {})
+
+            if trigger == 'ON_HOVER':
+                if action_type == 'NODE' and transition:
+                    duration = transition.get('duration', 300)
+                    easing = transition.get('easing', {}).get('type', 'ease-out').lower().replace('_', '-')
+                    interaction_hints.append(f"Add hover transition: {duration}ms {easing}")
+            elif trigger == 'ON_CLICK':
+                if action_type == 'URL':
+                    url = action.get('url', '')
+                    interaction_hints.append(f"Click opens URL: {url}")
+                elif action_type == 'NAVIGATE':
+                    dest_id = action.get('destinationId', '')
+                    interaction_hints.append(f"Click navigates to screen (node: {dest_id})")
+            elif trigger == 'ON_PRESS':
+                interaction_hints.append("Add active/pressed state styling")
+
+    # Accessibility hints
+    # Check for icon-only elements that need labels
+    if 'icon' in node_name.lower() or 'btn' in node_name.lower():
+        accessibility_hints.append("Add aria-label for screen readers")
+
+    # Check text contrast
+    fills = node.get('fills', [])
+    for fill in fills:
+        if fill.get('type') == 'SOLID' and fill.get('visible', True):
+            color = fill.get('color', {})
+            # Check if it's light text on light background
+            r, g, b = color.get('r', 0), color.get('g', 0), color.get('b', 0)
+            luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b
+            if luminance > 0.7:
+                accessibility_hints.append("Light color - ensure sufficient contrast with background (WCAG 4.5:1)")
+            elif luminance < 0.3:
+                accessibility_hints.append("Dark color - ensure sufficient contrast with background (WCAG 4.5:1)")
+
+    # Check touch target size
+    if bbox.get('width', 100) < 44 or bbox.get('height', 100) < 44:
+        if any(keyword in node_name.lower() for keyword in ['button', 'btn', 'icon', 'link', 'tap']):
+            accessibility_hints.append("Touch target may be too small - minimum 44x44px recommended")
+
+    # Component hints
+    if node_type == 'INSTANCE':
+        component_props = node.get('componentProperties', {})
+        variant_props = node.get('variantProperties', {})
+
+        if variant_props:
+            variants_str = ', '.join([f"{k}={v}" for k, v in variant_props.items()])
+            component_hints.append(f"Component variant: {variants_str}")
+
+        if component_props:
+            props_str = ', '.join(component_props.keys())
+            component_hints.append(f"Exposed props: {props_str}")
+
+    elif node_type == 'COMPONENT':
+        prop_defs = node.get('componentPropertyDefinitions', {})
+        if prop_defs:
+            component_hints.append(f"Component has {len(prop_defs)} customizable properties")
+
+    elif node_type == 'COMPONENT_SET':
+        component_hints.append("This is a component set with multiple variants")
+
+    # Build result with non-empty sections
+    if layout_hints:
+        hints['layout'] = layout_hints
+    if responsive_hints:
+        hints['responsive'] = responsive_hints
+    if interaction_hints:
+        hints['interactions'] = interaction_hints
+    if accessibility_hints:
+        hints['accessibility'] = accessibility_hints
+    if component_hints:
+        hints['components'] = component_hints
+
+    return hints if hints else None
+
+
+def _check_accessibility(node: Dict[str, Any], parent_fills: Optional[List] = None) -> Dict[str, Any]:
+    """Check accessibility issues for a node.
+
+    Returns contrast issues, touch target warnings, and missing labels.
+    """
+    issues: Dict[str, Any] = {
+        'contrast_issues': [],
+        'touch_target_warnings': [],
+        'label_warnings': []
+    }
+
+    node_name = node.get('name', '')
+    node_type = node.get('type', '')
+    bbox = node.get('absoluteBoundingBox', {})
+
+    # Touch target size check for interactive elements
+    interactive_keywords = ['button', 'btn', 'icon', 'link', 'tap', 'click', 'toggle', 'checkbox', 'radio', 'switch']
+    is_interactive = any(keyword in node_name.lower() for keyword in interactive_keywords)
+
+    if is_interactive and bbox:
+        width = bbox.get('width', 100)
+        height = bbox.get('height', 100)
+
+        if width < 44 or height < 44:
+            issues['touch_target_warnings'].append({
+                'type': 'SMALL_TOUCH_TARGET',
+                'message': f'Touch target too small ({width}x{height}px). Minimum recommended: 44x44px',
+                'severity': 'warning',
+                'wcag': 'WCAG 2.5.5 Target Size'
+            })
+
+        if width < 24 or height < 24:
+            issues['touch_target_warnings'].append({
+                'type': 'CRITICAL_TOUCH_TARGET',
+                'message': f'Touch target critically small ({width}x{height}px). May be unusable.',
+                'severity': 'error',
+                'wcag': 'WCAG 2.5.5 Target Size'
+            })
+
+    # Label warnings for icon-only buttons
+    if is_interactive and ('icon' in node_name.lower() or node_type == 'VECTOR'):
+        # Check if there's no text child
+        children = node.get('children', [])
+        has_text = any(c.get('type') == 'TEXT' for c in children)
+        if not has_text:
+            issues['label_warnings'].append({
+                'type': 'MISSING_LABEL',
+                'message': 'Icon-only interactive element may need aria-label',
+                'severity': 'warning',
+                'wcag': 'WCAG 1.1.1 Non-text Content'
+            })
+
+    # Contrast ratio check for text nodes
+    if node_type == 'TEXT':
+        fills = node.get('fills', [])
+
+        for fill in fills:
+            if fill.get('type') == 'SOLID' and fill.get('visible', True):
+                color = fill.get('color', {})
+                r = int(color.get('r', 0) * 255)
+                g = int(color.get('g', 0) * 255)
+                b = int(color.get('b', 0) * 255)
+                text_rgb = (r, g, b)
+
+                # Calculate contrast against white and black backgrounds
+                white_contrast = _contrast_ratio(text_rgb, (255, 255, 255))
+                black_contrast = _contrast_ratio(text_rgb, (0, 0, 0))
+
+                # Get font size for threshold determination
+                style = node.get('style', {})
+                font_size = style.get('fontSize', 16)
+                font_weight = style.get('fontWeight', 400)
+
+                # Large text threshold: 18pt (24px) or 14pt (18.66px) bold
+                is_large_text = font_size >= 24 or (font_size >= 18.66 and font_weight >= 700)
+                min_contrast = 3.0 if is_large_text else 4.5
+
+                # Check if contrast might be insufficient
+                hex_color = f"#{r:02x}{g:02x}{b:02x}"
+
+                if white_contrast < min_contrast and black_contrast < min_contrast:
+                    issues['contrast_issues'].append({
+                        'type': 'LOW_CONTRAST',
+                        'message': f'Text color {hex_color} may have insufficient contrast',
+                        'severity': 'warning',
+                        'wcag': 'WCAG 1.4.3 Contrast (Minimum)',
+                        'details': {
+                            'textColor': hex_color,
+                            'contrastVsWhite': white_contrast,
+                            'contrastVsBlack': black_contrast,
+                            'required': min_contrast,
+                            'isLargeText': is_large_text
+                        }
+                    })
+
+                # Warn about very low contrast colors
+                luminance = 0.2126 * (r/255) + 0.7152 * (g/255) + 0.0722 * (b/255)
+                if 0.35 < luminance < 0.65:  # Mid-range colors are problematic
+                    issues['contrast_issues'].append({
+                        'type': 'MEDIUM_GRAY_TEXT',
+                        'message': f'Mid-gray text ({hex_color}) often fails contrast requirements',
+                        'severity': 'info',
+                        'wcag': 'WCAG 1.4.3 Contrast (Minimum)'
+                    })
+
+    # Clean up empty arrays
+    result = {k: v for k, v in issues.items() if v}
+    return result if result else None
 
 
 # ============================================================================
@@ -1009,46 +1801,348 @@ def _blend_mode_to_css(blend_mode: str) -> Optional[str]:
     return blend_map.get(blend_mode)
 
 
+def _text_case_to_css(text_case: str) -> Optional[str]:
+    """Convert Figma textCase to CSS text-transform."""
+    case_map = {
+        'ORIGINAL': None,
+        'UPPER': 'uppercase',
+        'LOWER': 'lowercase',
+        'TITLE': 'capitalize',
+        'SMALL_CAPS': None,  # Requires font-variant: small-caps
+        'SMALL_CAPS_FORCED': None
+    }
+    return case_map.get(text_case)
+
+
+def _text_decoration_to_css(decoration: str) -> Optional[str]:
+    """Convert Figma textDecoration to CSS text-decoration."""
+    decoration_map = {
+        'NONE': None,
+        'UNDERLINE': 'underline',
+        'STRIKETHROUGH': 'line-through'
+    }
+    return decoration_map.get(decoration)
+
+
+def _text_case_to_swiftui(text_case: str) -> Optional[str]:
+    """Convert Figma textCase to SwiftUI modifier."""
+    case_map = {
+        'UPPER': '.textCase(.uppercase)',
+        'LOWER': '.textCase(.lowercase)',
+        'TITLE': '.textCase(.titleCase)'  # iOS 17+
+    }
+    return case_map.get(text_case)
+
+
+def _text_case_to_kotlin(text_case: str) -> Optional[str]:
+    """Convert Figma textCase to Kotlin/Compose text transformation."""
+    case_map = {
+        'UPPER': 'text.uppercase()',
+        'LOWER': 'text.lowercase()',
+        'TITLE': 'text.split(" ").joinToString(" ") { it.capitalize() }'
+    }
+    return case_map.get(text_case)
+
+
+def _get_single_fill_css(fill: Dict[str, Any]) -> Optional[str]:
+    """Convert a single fill to CSS value.
+
+    Returns:
+        CSS value string for the fill, or None if not visible
+    """
+    if not fill.get('visible', True):
+        return None
+
+    fill_type = fill.get('type', '')
+
+    if fill_type == 'SOLID':
+        color = fill.get('color', {})
+        opacity = fill.get('opacity', 1)
+        hex_color = _rgba_to_hex(color)
+
+        if opacity < 1:
+            r = int(color.get('r', 0) * 255)
+            g = int(color.get('g', 0) * 255)
+            b = int(color.get('b', 0) * 255)
+            return f"rgba({r}, {g}, {b}, {opacity:.2f})"
+
+        return hex_color
+
+    elif 'GRADIENT' in fill_type:
+        gradient_css = _gradient_to_css(fill)
+        if gradient_css:
+            return gradient_css
+
+    elif fill_type == 'IMAGE':
+        # Return placeholder for image - will be resolved with actual URL later
+        image_ref = fill.get('imageRef', '')
+        scale_mode = fill.get('scaleMode', 'FILL')
+        if scale_mode == 'FILL':
+            return f"url(/* imageRef: {image_ref} */) center/cover no-repeat"
+        elif scale_mode == 'FIT':
+            return f"url(/* imageRef: {image_ref} */) center/contain no-repeat"
+        elif scale_mode == 'TILE':
+            return f"url(/* imageRef: {image_ref} */) repeat"
+        else:
+            return f"url(/* imageRef: {image_ref} */)"
+
+    return None
+
+
 def _get_background_css(node: Dict[str, Any]) -> tuple[Optional[str], Optional[str]]:
     """Extract background CSS (color or gradient) from node fills.
 
+    For single fills, returns the simple value.
+    For multiple fills, returns layered CSS background.
+
     Returns:
-        tuple: (background_value, background_type) where type is 'color' or 'gradient'
+        tuple: (background_value, background_type) where type is 'color', 'gradient', 'image', or 'layered'
     """
     fills = node.get('fills', [])
     if not fills:
         return None, None
 
+    # Collect all visible fills as CSS values
+    # Figma fills are ordered bottom-to-top, CSS backgrounds are top-to-bottom
+    # So we need to reverse the order
+    css_values = []
+    fill_types = []
+
     for fill in fills:
-        if not fill.get('visible', True):
-            continue
+        css_value = _get_single_fill_css(fill)
+        if css_value:
+            css_values.append(css_value)
+            fill_type = fill.get('type', 'SOLID')
+            if 'GRADIENT' in fill_type:
+                fill_types.append('gradient')
+            elif fill_type == 'IMAGE':
+                fill_types.append('image')
+            else:
+                fill_types.append('color')
 
-        fill_type = fill.get('type', '')
+    if not css_values:
+        return None, None
 
-        if fill_type == 'SOLID':
-            color = fill.get('color', {})
-            opacity = fill.get('opacity', 1)
-            hex_color = _rgba_to_hex(color)
+    # Single fill - return simple value with type
+    if len(css_values) == 1:
+        return css_values[0], fill_types[0]
 
-            if opacity < 1:
-                r = int(color.get('r', 0) * 255)
-                g = int(color.get('g', 0) * 255)
-                b = int(color.get('b', 0) * 255)
-                return f"rgba({r}, {g}, {b}, {opacity:.2f})", 'color'
+    # Multiple fills - reverse order (Figma bottom-to-top → CSS top-to-bottom)
+    # and combine into layered background
+    css_values.reverse()
+    fill_types.reverse()
 
-            return hex_color, 'color'
+    # Join with comma for CSS layered background
+    layered_css = ', '.join(css_values)
 
-        elif 'GRADIENT' in fill_type:
-            gradient_css = _gradient_to_css(fill)
-            if gradient_css:
-                return gradient_css, 'gradient'
+    return layered_css, 'layered'
 
-        elif fill_type == 'IMAGE':
-            # Return placeholder for image
-            image_ref = fill.get('imageRef', '')
-            return f"/* Image: {image_ref} */", 'image'
 
-    return None, None
+# ============================================================================
+# Design Token Code Generation Helpers
+# ============================================================================
+
+def _sanitize_token_name(name: str) -> str:
+    """Sanitize token name for use in CSS/SCSS variables and Tailwind config."""
+    # Convert to lowercase, replace spaces and special chars with hyphens
+    import re
+    sanitized = re.sub(r'[^a-zA-Z0-9]+', '-', name.lower())
+    # Remove leading/trailing hyphens
+    sanitized = sanitized.strip('-')
+    return sanitized or 'unnamed'
+
+
+def _generate_css_variables(colors: List[Dict], typography: List[Dict], spacing: List[Dict], effects: List[Dict]) -> str:
+    """Generate CSS custom properties from design tokens."""
+    lines = [":root {", "  /* Colors */"]
+
+    # Deduplicate colors by hex value
+    seen_colors = set()
+    for color in colors:
+        hex_val = color.get('hex') or color.get('color', '')
+        if hex_val and hex_val not in seen_colors and not hex_val.startswith('/*'):
+            seen_colors.add(hex_val)
+            name = _sanitize_token_name(color.get('name', 'color'))
+            category = color.get('category', 'fill')
+            lines.append(f"  --color-{category}-{name}: {hex_val};")
+
+    # Typography
+    if typography:
+        lines.append("")
+        lines.append("  /* Typography */")
+        seen_fonts = set()
+        for typo in typography:
+            font_family = typo.get('fontFamily', 'sans-serif')
+            if font_family not in seen_fonts:
+                seen_fonts.add(font_family)
+                name = _sanitize_token_name(font_family)
+                lines.append(f"  --font-family-{name}: '{font_family}', sans-serif;")
+                lines.append(f"  --font-size-{name}: {typo.get('fontSize', 16)}px;")
+                lines.append(f"  --font-weight-{name}: {typo.get('fontWeight', 400)};")
+                if typo.get('lineHeight'):
+                    lines.append(f"  --line-height-{name}: {typo.get('lineHeight')}px;")
+
+    # Spacing
+    if spacing:
+        lines.append("")
+        lines.append("  /* Spacing */")
+        seen_spacing = set()
+        for sp in spacing:
+            if sp.get('type') == 'auto-layout':
+                padding = sp.get('padding', {})
+                gap = sp.get('gap', 0)
+                name = _sanitize_token_name(sp.get('name', 'spacing'))
+                key = f"{padding.get('top', 0)}-{padding.get('right', 0)}-{gap}"
+                if key not in seen_spacing:
+                    seen_spacing.add(key)
+                    lines.append(f"  --spacing-{name}-padding: {padding.get('top', 0)}px {padding.get('right', 0)}px {padding.get('bottom', 0)}px {padding.get('left', 0)}px;")
+                    lines.append(f"  --spacing-{name}-gap: {gap}px;")
+
+    # Effects (shadows)
+    if effects:
+        lines.append("")
+        lines.append("  /* Shadows */")
+        seen_shadows = set()
+        for effect in effects:
+            if effect.get('type') in ['DROP_SHADOW', 'INNER_SHADOW']:
+                hex_val = effect.get('hex') or effect.get('color', '#000')
+                offset = effect.get('offset', {})
+                key = f"{hex_val}-{offset.get('x', 0)}-{offset.get('y', 0)}-{effect.get('radius', 0)}"
+                if key not in seen_shadows:
+                    seen_shadows.add(key)
+                    name = _sanitize_token_name(effect.get('name', 'shadow'))
+                    x = offset.get('x', 0)
+                    y = offset.get('y', 0)
+                    blur = effect.get('radius', 0)
+                    spread = effect.get('spread', 0)
+                    inset = 'inset ' if effect.get('type') == 'INNER_SHADOW' else ''
+                    lines.append(f"  --shadow-{name}: {inset}{x}px {y}px {blur}px {spread}px {hex_val};")
+
+    lines.append("}")
+    return "\n".join(lines)
+
+
+def _generate_scss_variables(colors: List[Dict], typography: List[Dict], spacing: List[Dict], effects: List[Dict]) -> str:
+    """Generate SCSS variables from design tokens."""
+    lines = ["// Design Tokens - Generated from Figma", "", "// Colors"]
+
+    # Colors
+    seen_colors = set()
+    for color in colors:
+        hex_val = color.get('hex') or color.get('color', '')
+        if hex_val and hex_val not in seen_colors and not hex_val.startswith('/*'):
+            seen_colors.add(hex_val)
+            name = _sanitize_token_name(color.get('name', 'color'))
+            category = color.get('category', 'fill')
+            lines.append(f"$color-{category}-{name}: {hex_val};")
+
+    # Typography
+    if typography:
+        lines.append("")
+        lines.append("// Typography")
+        seen_fonts = set()
+        for typo in typography:
+            font_family = typo.get('fontFamily', 'sans-serif')
+            if font_family not in seen_fonts:
+                seen_fonts.add(font_family)
+                name = _sanitize_token_name(font_family)
+                lines.append(f"$font-family-{name}: '{font_family}', sans-serif;")
+                lines.append(f"$font-size-{name}: {typo.get('fontSize', 16)}px;")
+                lines.append(f"$font-weight-{name}: {typo.get('fontWeight', 400)};")
+
+    # Spacing
+    if spacing:
+        lines.append("")
+        lines.append("// Spacing")
+        for sp in spacing:
+            if sp.get('type') == 'auto-layout':
+                name = _sanitize_token_name(sp.get('name', 'spacing'))
+                gap = sp.get('gap', 0)
+                lines.append(f"$spacing-{name}-gap: {gap}px;")
+
+    # Shadows
+    if effects:
+        lines.append("")
+        lines.append("// Shadows")
+        for effect in effects:
+            if effect.get('type') in ['DROP_SHADOW', 'INNER_SHADOW']:
+                name = _sanitize_token_name(effect.get('name', 'shadow'))
+                hex_val = effect.get('hex') or effect.get('color', '#000')
+                offset = effect.get('offset', {})
+                x = offset.get('x', 0)
+                y = offset.get('y', 0)
+                blur = effect.get('radius', 0)
+                spread = effect.get('spread', 0)
+                inset = 'inset ' if effect.get('type') == 'INNER_SHADOW' else ''
+                lines.append(f"$shadow-{name}: {inset}{x}px {y}px {blur}px {spread}px {hex_val};")
+
+    return "\n".join(lines)
+
+
+def _generate_tailwind_config(colors: List[Dict], typography: List[Dict], spacing: List[Dict]) -> str:
+    """Generate Tailwind CSS theme extension from design tokens."""
+    # Collect unique colors
+    color_entries = {}
+    for color in colors:
+        hex_val = color.get('hex') or color.get('color', '')
+        if hex_val and not hex_val.startswith('/*') and not hex_val.startswith('rgba'):
+            name = _sanitize_token_name(color.get('name', 'color'))
+            if name not in color_entries:
+                color_entries[name] = hex_val
+
+    # Collect font families
+    font_entries = {}
+    for typo in typography:
+        font_family = typo.get('fontFamily', '')
+        if font_family:
+            name = _sanitize_token_name(font_family)
+            if name not in font_entries:
+                font_entries[name] = f"['{font_family}', 'sans-serif']"
+
+    # Collect spacing values
+    spacing_entries = {}
+    for sp in spacing:
+        if sp.get('type') == 'auto-layout':
+            gap = sp.get('gap', 0)
+            if gap > 0:
+                spacing_entries[str(gap)] = f"'{gap}px'"
+
+    # Build config
+    lines = [
+        "// tailwind.config.js - Generated from Figma",
+        "module.exports = {",
+        "  theme: {",
+        "    extend: {"
+    ]
+
+    # Colors
+    if color_entries:
+        lines.append("      colors: {")
+        for name, hex_val in color_entries.items():
+            lines.append(f"        '{name}': '{hex_val}',")
+        lines.append("      },")
+
+    # Fonts
+    if font_entries:
+        lines.append("      fontFamily: {")
+        for name, value in font_entries.items():
+            lines.append(f"        '{name}': {value},")
+        lines.append("      },")
+
+    # Spacing
+    if spacing_entries:
+        lines.append("      spacing: {")
+        for key, value in spacing_entries.items():
+            lines.append(f"        '{key}': {value},")
+        lines.append("      },")
+
+    lines.extend([
+        "    }",
+        "  }",
+        "}"
+    ])
+
+    return "\n".join(lines)
 
 
 def _extract_colors_from_node(node: Dict[str, Any], colors: List[Dict[str, Any]]) -> None:
@@ -1383,21 +2477,81 @@ def _recursive_node_to_vue_template(node: Dict[str, Any], indent: int = 4, use_t
         style = node.get('style', {})
         font_size = style.get('fontSize', 16)
         font_weight = style.get('fontWeight', 400)
+        text_case = style.get('textCase', 'ORIGINAL')
+        text_decoration = style.get('textDecoration', 'NONE')
+        line_height = style.get('lineHeightPx')
+        letter_spacing = style.get('letterSpacing', 0)
+        text_align = style.get('textAlignHorizontal', 'LEFT').lower()
+
+        # Get hyperlink if present
+        hyperlink = node.get('hyperlink')
+        hyperlink_url = None
+        if hyperlink and hyperlink.get('type') == 'URL':
+            hyperlink_url = hyperlink.get('url', '')
 
         text_color = ''
         if fills and fills[0].get('type') == 'SOLID' and fills[0].get('visible', True):
             text_color = _rgba_to_hex(fills[0].get('color', {}))
 
+        # Convert text case and decoration to CSS
+        text_transform = _text_case_to_css(text_case)
+        text_dec_value = _text_decoration_to_css(text_decoration)
+
+        # Get maxLines and textTruncation for line-clamp
+        max_lines = style.get('maxLines')
+        text_truncation = style.get('textTruncation', 'DISABLED')
+
         if use_tailwind:
-            weight_map = {300: 'font-light', 400: 'font-normal', 500: 'font-medium', 600: 'font-semibold', 700: 'font-bold'}
+            weight_map = {300: 'font-light', 400: 'font-normal', 500: 'font-medium', 600: 'font-semibold', 700: 'font-bold', 800: 'font-extrabold', 900: 'font-black'}
             weight_class = weight_map.get(font_weight, 'font-normal')
+            align_map = {'left': 'text-left', 'center': 'text-center', 'right': 'text-right', 'justified': 'text-justify'}
+            align_class = align_map.get(text_align, '')
+
+            # Tailwind text-transform classes
+            transform_map = {'uppercase': 'uppercase', 'lowercase': 'lowercase', 'capitalize': 'capitalize'}
+            transform_class = transform_map.get(text_transform, '') if text_transform else ''
+
+            # Tailwind text-decoration classes
+            decoration_map = {'underline': 'underline', 'line-through': 'line-through'}
+            decoration_class = decoration_map.get(text_dec_value, '') if text_dec_value else ''
+
             classes = [f'text-[{int(font_size)}px]', weight_class]
             if text_color:
                 classes.append(f'text-[{text_color}]')
+            if line_height:
+                classes.append(f'leading-[{int(line_height)}px]')
+            if letter_spacing:
+                classes.append(f'tracking-[{letter_spacing:.2f}px]')
+            if align_class:
+                classes.append(align_class)
+            if transform_class:
+                classes.append(transform_class)
+            if decoration_class:
+                classes.append(decoration_class)
+
+            # Tailwind line-clamp for maxLines
+            if max_lines and max_lines > 0:
+                classes.append(f'line-clamp-{max_lines}')
+                if text_truncation == 'ENDING':
+                    classes.append('text-ellipsis')
+
+            # Paragraph spacing (margin-bottom)
+            paragraph_spacing = style.get('paragraphSpacing', 0)
+            if paragraph_spacing and paragraph_spacing > 0:
+                classes.append(f'mb-[{int(paragraph_spacing)}px]')
+
             class_str = ' '.join(filter(None, classes))
-            lines.append(f'{prefix}<span class="{class_str}">{text}</span>')
+            # Wrap in anchor tag if hyperlink present
+            if hyperlink_url:
+                lines.append(f'{prefix}<a href="{hyperlink_url}" class="{class_str}" target="_blank" rel="noopener noreferrer">{text}</a>')
+            else:
+                lines.append(f'{prefix}<span class="{class_str}">{text}</span>')
         else:
-            lines.append(f'{prefix}<span class="text-{name.lower().replace(" ", "-")}">{text}</span>')
+            # Wrap in anchor tag if hyperlink present
+            if hyperlink_url:
+                lines.append(f'{prefix}<a href="{hyperlink_url}" class="text-{name.lower().replace(" ", "-")}" target="_blank" rel="noopener noreferrer">{text}</a>')
+            else:
+                lines.append(f'{prefix}<span class="text-{name.lower().replace(" ", "-")}">{text}</span>')
     else:
         if use_tailwind:
             classes = []
@@ -1412,7 +2566,8 @@ def _recursive_node_to_vue_template(node: Dict[str, Any], indent: int = 4, use_t
             if bg_value and bg_type:
                 if bg_type == 'color':
                     classes.append(f'bg-[{bg_value}]')
-                elif bg_type == 'gradient':
+                elif bg_type in ('gradient', 'image', 'layered'):
+                    # Gradients, images, and layered backgrounds need inline style
                     inline_styles.append(f"background: {bg_value}")
 
             # Corner radius
@@ -1452,6 +2607,20 @@ def _recursive_node_to_vue_template(node: Dict[str, Any], indent: int = 4, use_t
                 classes.append(f'pb-[{padding_bottom}px]')
             if padding_left:
                 classes.append(f'pl-[{padding_left}px]')
+
+            # Flex child properties (layoutGrow, layoutPositioning, layoutAlign)
+            layout_grow = node.get('layoutGrow', 0)
+            layout_positioning = node.get('layoutPositioning')
+            layout_align = node.get('layoutAlign')
+
+            if layout_grow and layout_grow > 0:
+                classes.append('grow')  # Tailwind: flex-grow: 1
+            if layout_positioning == 'ABSOLUTE':
+                classes.append('absolute')
+            if layout_align == 'STRETCH':
+                classes.append('self-stretch')
+            elif layout_align == 'INHERIT':
+                classes.append('self-auto')
 
             class_str = ' '.join(filter(None, classes))
 
@@ -1565,6 +2734,12 @@ def _generate_recursive_css(node: Dict[str, Any], rules: List[str], parent_name:
         style = node.get('style', {})
         font_size = style.get('fontSize', 16)
         font_weight = style.get('fontWeight', 400)
+        text_case = style.get('textCase', 'ORIGINAL')
+        text_decoration = style.get('textDecoration', 'NONE')
+        line_height = style.get('lineHeightPx')
+        letter_spacing = style.get('letterSpacing', 0)
+        text_align = style.get('textAlignHorizontal', 'LEFT').lower()
+        font_family = style.get('fontFamily', '')
         text_color = ''
         if fills and fills[0].get('type') == 'SOLID':
             text_color = _rgba_to_hex(fills[0].get('color', {}))
@@ -1572,6 +2747,24 @@ def _generate_recursive_css(node: Dict[str, Any], rules: List[str], parent_name:
         css_props = [f"font-size: {int(font_size)}px;", f"font-weight: {font_weight};"]
         if text_color:
             css_props.append(f"color: {text_color};")
+        if font_family:
+            css_props.append(f"font-family: '{font_family}', sans-serif;")
+        if line_height:
+            css_props.append(f"line-height: {line_height}px;")
+        if letter_spacing:
+            css_props.append(f"letter-spacing: {letter_spacing}px;")
+        if text_align != 'left':
+            css_props.append(f"text-align: {text_align};")
+
+        # Text transform (textCase)
+        text_transform = _text_case_to_css(text_case)
+        if text_transform:
+            css_props.append(f"text-transform: {text_transform};")
+
+        # Text decoration
+        text_dec_value = _text_decoration_to_css(text_decoration)
+        if text_dec_value:
+            css_props.append(f"text-decoration: {text_dec_value};")
 
     if css_props:
         rule = f".{class_name} {{\n  " + "\n  ".join(css_props) + "\n}"
@@ -1589,13 +2782,14 @@ def _generate_css_code(node: Dict[str, Any], component_name: str) -> str:
     width = bbox.get('width', 'auto')
     height = bbox.get('height', 'auto')
 
-    # Background (with gradient support)
+    # Background (with gradient, image, and layered support)
     bg_value, bg_type = _get_background_css(node)
     bg_css = ''
     if bg_value and bg_type:
         if bg_type == 'color':
             bg_css = f"background-color: {bg_value};"
-        elif bg_type == 'gradient':
+        elif bg_type in ('gradient', 'image', 'layered'):
+            # Use 'background' shorthand for gradients, images, and layered backgrounds
             bg_css = f"background: {bg_value};"
 
     # Strokes (comprehensive)
@@ -1649,6 +2843,25 @@ def _generate_css_code(node: Dict[str, Any], component_name: str) -> str:
   justify-content: {justify_map.get(primary_align, 'flex-start')};
   align-items: {items_map.get(counter_align, 'flex-start')};"""
 
+    # Flex child properties (layoutGrow, layoutPositioning, layoutAlign)
+    flex_child_css = ''
+    layout_grow = node.get('layoutGrow', 0)
+    layout_positioning = node.get('layoutPositioning')
+    layout_align = node.get('layoutAlign')
+
+    flex_child_lines = []
+    if layout_grow and layout_grow > 0:
+        flex_child_lines.append(f"flex-grow: {layout_grow};")
+    if layout_positioning == 'ABSOLUTE':
+        flex_child_lines.append("position: absolute;")
+    if layout_align == 'STRETCH':
+        flex_child_lines.append("align-self: stretch;")
+    elif layout_align == 'INHERIT':
+        flex_child_lines.append("align-self: auto;")
+
+    if flex_child_lines:
+        flex_child_css = '\n  '.join(flex_child_lines)
+
     # Effects (shadows and blurs)
     effects_data = _extract_effects_data(node)
     shadow_css = ''
@@ -1671,6 +2884,78 @@ def _generate_css_code(node: Dict[str, Any], component_name: str) -> str:
                 blur_css = f"filter: blur({int(blur.get('radius', 0))}px);"
             elif blur.get('type') == 'BACKGROUND_BLUR':
                 blur_css = f"backdrop-filter: blur({int(blur.get('radius', 0))}px);"
+
+    # Text-specific styles (for TEXT nodes)
+    text_css = ''
+    text_decoration_css = ''
+    hyperlink_comment = ''
+    if node.get('type') == 'TEXT':
+        style = node.get('style', {})
+
+        # Get hyperlink if present (CSS can't create links, but we add a comment)
+        hyperlink = node.get('hyperlink')
+        if hyperlink and hyperlink.get('type') == 'URL':
+            hyperlink_comment = f"/* Hyperlink: {hyperlink.get('url', '')} - Use <a> tag in HTML */"
+
+        # Text transform (textCase)
+        text_case = style.get('textCase', 'ORIGINAL')
+        text_transform = _text_case_to_css(text_case)
+        if text_transform:
+            text_css = f"text-transform: {text_transform};"
+
+        # Text decoration
+        text_decoration = style.get('textDecoration', 'NONE')
+        text_dec_value = _text_decoration_to_css(text_decoration)
+        if text_dec_value:
+            text_decoration_css = f"text-decoration: {text_dec_value};"
+
+        # Font properties
+        font_family = style.get('fontFamily', 'sans-serif')
+        font_size = style.get('fontSize', 16)
+        font_weight = style.get('fontWeight', 400)
+        line_height = style.get('lineHeightPx')
+        letter_spacing = style.get('letterSpacing', 0)
+        text_align = style.get('textAlignHorizontal', 'LEFT').lower()
+
+        text_css_lines = []
+        if hyperlink_comment:
+            text_css_lines.append(hyperlink_comment)
+        text_css_lines.extend([
+            f"font-family: '{font_family}', sans-serif;",
+            f"font-size: {font_size}px;",
+            f"font-weight: {font_weight};",
+        ])
+        if line_height:
+            text_css_lines.append(f"line-height: {line_height}px;")
+        if letter_spacing:
+            text_css_lines.append(f"letter-spacing: {letter_spacing}px;")
+        if text_align != 'left':
+            text_css_lines.append(f"text-align: {text_align};")
+        if text_transform:
+            text_css_lines.append(f"text-transform: {text_transform};")
+        if text_dec_value:
+            text_css_lines.append(f"text-decoration: {text_dec_value};")
+
+        # Text truncation (maxLines + textTruncation)
+        max_lines = style.get('maxLines')
+        text_truncation = style.get('textTruncation', 'DISABLED')
+        if max_lines and max_lines > 0:
+            text_css_lines.append("display: -webkit-box;")
+            text_css_lines.append(f"-webkit-line-clamp: {max_lines};")
+            text_css_lines.append("-webkit-box-orient: vertical;")
+            text_css_lines.append("overflow: hidden;")
+            if text_truncation == 'ENDING':
+                text_css_lines.append("text-overflow: ellipsis;")
+
+        # Paragraph spacing and indent
+        paragraph_spacing = style.get('paragraphSpacing', 0)
+        paragraph_indent = style.get('paragraphIndent', 0)
+        if paragraph_spacing and paragraph_spacing > 0:
+            text_css_lines.append(f"margin-bottom: {paragraph_spacing}px; /* paragraph spacing */")
+        if paragraph_indent and paragraph_indent > 0:
+            text_css_lines.append(f"text-indent: {paragraph_indent}px;")
+
+        text_css = '\n  '.join(text_css_lines)
 
     # Build final CSS
     css_lines = [
@@ -1696,6 +2981,10 @@ def _generate_css_code(node: Dict[str, Any], component_name: str) -> str:
         css_lines.append(blur_css)
     if layout_css:
         css_lines.append(layout_css)
+    if flex_child_css:
+        css_lines.append(flex_child_css)
+    if text_css:
+        css_lines.append(text_css)
 
     css_content = '\n  '.join(css_lines)
 
@@ -1808,6 +3097,9 @@ def _generate_scss_code(node: Dict[str, Any], component_name: str) -> str:
         styles_list.append('background: $bg-gradient;')
     elif bg_type == 'image':
         styles_list.append(f'background: url("{bg_value}") center/cover no-repeat;')
+    elif bg_type == 'layered':
+        # Layered backgrounds (multiple fills combined)
+        styles_list.append(f'background: {bg_value};')
 
     styles_list.append('border-radius: $border-radius;')
 
@@ -1840,6 +3132,81 @@ def _generate_scss_code(node: Dict[str, Any], component_name: str) -> str:
         ])
         if layout_wrap == 'WRAP':
             styles_list.append('flex-wrap: wrap;')
+
+    # Flex child properties (layoutGrow, layoutPositioning, layoutAlign)
+    layout_grow = node.get('layoutGrow', 0)
+    layout_positioning = node.get('layoutPositioning')
+    layout_align = node.get('layoutAlign')
+
+    if layout_grow and layout_grow > 0:
+        styles_list.append(f'flex-grow: {layout_grow};')
+    if layout_positioning == 'ABSOLUTE':
+        styles_list.append('position: absolute;')
+    if layout_align == 'STRETCH':
+        styles_list.append('align-self: stretch;')
+    elif layout_align == 'INHERIT':
+        styles_list.append('align-self: auto;')
+
+    # Text-specific styles (for TEXT nodes)
+    if node.get('type') == 'TEXT':
+        style = node.get('style', {})
+        font_family = style.get('fontFamily', 'sans-serif')
+        font_size = style.get('fontSize', 16)
+        font_weight = style.get('fontWeight', 400)
+        line_height = style.get('lineHeightPx')
+        letter_spacing = style.get('letterSpacing', 0)
+        text_align = style.get('textAlignHorizontal', 'LEFT').lower()
+        text_case = style.get('textCase', 'ORIGINAL')
+        text_decoration = style.get('textDecoration', 'NONE')
+
+        # Get hyperlink if present (SCSS can't create links, but we add a comment)
+        hyperlink = node.get('hyperlink')
+        if hyperlink and hyperlink.get('type') == 'URL':
+            styles_list.insert(0, f"// Hyperlink: {hyperlink.get('url', '')} - Use <a> tag in HTML")
+
+        # Add typography variables
+        variables_list.insert(-1, f"$font-family: '{font_family}', sans-serif;")
+        variables_list.insert(-1, f'$font-size: {font_size}px;')
+        variables_list.insert(-1, f'$font-weight: {font_weight};')
+
+        styles_list.extend([
+            'font-family: $font-family;',
+            'font-size: $font-size;',
+            'font-weight: $font-weight;',
+        ])
+        if line_height:
+            styles_list.append(f'line-height: {line_height}px;')
+        if letter_spacing:
+            styles_list.append(f'letter-spacing: {letter_spacing}px;')
+        if text_align != 'left':
+            styles_list.append(f'text-align: {text_align};')
+
+        text_transform = _text_case_to_css(text_case)
+        if text_transform:
+            styles_list.append(f'text-transform: {text_transform};')
+
+        text_dec_value = _text_decoration_to_css(text_decoration)
+        if text_dec_value:
+            styles_list.append(f'text-decoration: {text_dec_value};')
+
+        # Text truncation (maxLines + textTruncation)
+        max_lines = style.get('maxLines')
+        text_truncation = style.get('textTruncation', 'DISABLED')
+        if max_lines and max_lines > 0:
+            styles_list.append('display: -webkit-box;')
+            styles_list.append(f'-webkit-line-clamp: {max_lines};')
+            styles_list.append('-webkit-box-orient: vertical;')
+            styles_list.append('overflow: hidden;')
+            if text_truncation == 'ENDING':
+                styles_list.append('text-overflow: ellipsis;')
+
+        # Paragraph spacing and indent
+        paragraph_spacing = style.get('paragraphSpacing', 0)
+        paragraph_indent = style.get('paragraphIndent', 0)
+        if paragraph_spacing and paragraph_spacing > 0:
+            styles_list.append(f'margin-bottom: {paragraph_spacing}px; // paragraph spacing')
+        if paragraph_indent and paragraph_indent > 0:
+            styles_list.append(f'text-indent: {paragraph_indent}px;')
 
     styles = '\n  '.join(styles_list)
 
@@ -2087,10 +3454,48 @@ def _generate_swiftui_children(children: List[Dict[str, Any]], indent: int = 12)
             style = child.get('style', {})
             font_size = style.get('fontSize', 16)
             font_weight = style.get('fontWeight', 400)
+            text_case = style.get('textCase', 'ORIGINAL')
+            text_decoration = style.get('textDecoration', 'NONE')
+
+            # Get hyperlink if present
+            hyperlink = child.get('hyperlink')
+            hyperlink_url = None
+            if hyperlink and hyperlink.get('type') == 'URL':
+                hyperlink_url = hyperlink.get('url', '')
+
             weight_map = {300: '.light', 400: '.regular', 500: '.medium', 600: '.semibold', 700: '.bold'}
             weight = weight_map.get(font_weight, '.regular')
-            lines.append(f'{prefix}Text("{text}")')
+
+            # Use Link if hyperlink present, otherwise Text
+            if hyperlink_url:
+                lines.append(f'{prefix}Link("{text}", destination: URL(string: "{hyperlink_url}")!)')
+            else:
+                lines.append(f'{prefix}Text("{text}")')
             lines.append(f'{prefix}    .font(.system(size: {font_size}, weight: {weight}))')
+
+            # Text case (textCase)
+            text_case_modifier = _text_case_to_swiftui(text_case)
+            if text_case_modifier:
+                lines.append(f'{prefix}    {text_case_modifier}')
+
+            # Text decoration (underline/strikethrough)
+            if text_decoration == 'UNDERLINE':
+                lines.append(f'{prefix}    .underline()')
+            elif text_decoration == 'STRIKETHROUGH':
+                lines.append(f'{prefix}    .strikethrough()')
+
+            # Line limit (maxLines)
+            max_lines = style.get('maxLines')
+            text_truncation = style.get('textTruncation', 'DISABLED')
+            if max_lines and max_lines > 0:
+                lines.append(f'{prefix}    .lineLimit({max_lines})')
+                if text_truncation == 'ENDING':
+                    lines.append(f'{prefix}    .truncationMode(.tail)')
+
+            # Paragraph spacing (bottom padding)
+            paragraph_spacing = style.get('paragraphSpacing', 0)
+            if paragraph_spacing and paragraph_spacing > 0:
+                lines.append(f'{prefix}    .padding(.bottom, {int(paragraph_spacing)})')
         elif node_type in ['FRAME', 'GROUP', 'COMPONENT', 'INSTANCE']:
             bbox = child.get('absoluteBoundingBox', {})
             w = bbox.get('width', 50)
@@ -2355,10 +3760,78 @@ def _generate_kotlin_children(children: List[Dict[str, Any]], indent: int = 8) -
             text = child.get('characters', name)
             style = child.get('style', {})
             font_size = style.get('fontSize', 16)
-            lines.append(f'{prefix}Text(')
-            lines.append(f'{prefix}    text = "{text}",')
-            lines.append(f'{prefix}    fontSize = {int(font_size)}.sp')
-            lines.append(f'{prefix})')
+            font_weight = style.get('fontWeight', 400)
+            text_case = style.get('textCase', 'ORIGINAL')
+            text_decoration = style.get('textDecoration', 'NONE')
+
+            # Get hyperlink if present
+            hyperlink = child.get('hyperlink')
+            hyperlink_url = None
+            if hyperlink and hyperlink.get('type') == 'URL':
+                hyperlink_url = hyperlink.get('url', '')
+
+            # Build Kotlin weight
+            kotlin_weight = 'FontWeight.Normal'
+            if font_weight >= 700:
+                kotlin_weight = 'FontWeight.Bold'
+            elif font_weight >= 600:
+                kotlin_weight = 'FontWeight.SemiBold'
+            elif font_weight >= 500:
+                kotlin_weight = 'FontWeight.Medium'
+            elif font_weight <= 300:
+                kotlin_weight = 'FontWeight.Light'
+
+            # Build text decoration
+            text_dec_kotlin = 'TextDecoration.None'
+            if text_decoration == 'UNDERLINE':
+                text_dec_kotlin = 'TextDecoration.Underline'
+            elif text_decoration == 'STRIKETHROUGH':
+                text_dec_kotlin = 'TextDecoration.LineThrough'
+
+            # Apply text case transformation
+            text_expr = f'"{text}"'
+            if text_case == 'UPPER':
+                text_expr = f'"{text}".uppercase()'
+            elif text_case == 'LOWER':
+                text_expr = f'"{text}".lowercase()'
+            elif text_case == 'TITLE':
+                text_expr = f'"{text}".split(" ").joinToString(" ") {{ it.replaceFirstChar {{ c -> c.titlecase() }} }}'
+
+            # Line limits (maxLines + textTruncation)
+            max_lines = style.get('maxLines')
+            text_truncation = style.get('textTruncation', 'DISABLED')
+            overflow_mode = 'TextOverflow.Ellipsis' if text_truncation == 'ENDING' else 'TextOverflow.Clip'
+
+            # Use ClickableText with hyperlink if present
+            if hyperlink_url:
+                lines.append(f'{prefix}// Clickable link: {hyperlink_url}')
+                lines.append(f'{prefix}ClickableText(')
+                lines.append(f'{prefix}    text = AnnotatedString({text_expr}),')
+                lines.append(f'{prefix}    style = TextStyle(')
+                lines.append(f'{prefix}        fontSize = {int(font_size)}.sp,')
+                lines.append(f'{prefix}        fontWeight = {kotlin_weight},')
+                lines.append(f'{prefix}        textDecoration = {text_dec_kotlin}')
+                lines.append(f'{prefix}    ),')
+                if max_lines and max_lines > 0:
+                    lines.append(f'{prefix}    maxLines = {max_lines},')
+                    lines.append(f'{prefix}    overflow = {overflow_mode},')
+                lines.append(f'{prefix}    onClick = {{ uriHandler.openUri("{hyperlink_url}") }}')
+                lines.append(f'{prefix})')
+            else:
+                # Get paragraph spacing for modifier
+                paragraph_spacing = style.get('paragraphSpacing', 0)
+
+                lines.append(f'{prefix}Text(')
+                lines.append(f'{prefix}    text = {text_expr},')
+                if paragraph_spacing and paragraph_spacing > 0:
+                    lines.append(f'{prefix}    modifier = Modifier.padding(bottom = {int(paragraph_spacing)}.dp),')
+                lines.append(f'{prefix}    fontSize = {int(font_size)}.sp,')
+                lines.append(f'{prefix}    fontWeight = {kotlin_weight},')
+                if max_lines and max_lines > 0:
+                    lines.append(f'{prefix}    maxLines = {max_lines},')
+                    lines.append(f'{prefix}    overflow = {overflow_mode},')
+                lines.append(f'{prefix}    textDecoration = {text_dec_kotlin}')
+                lines.append(f'{prefix})')
         elif node_type in ['FRAME', 'GROUP', 'COMPONENT', 'INSTANCE', 'RECTANGLE']:
             bbox = child.get('absoluteBoundingBox', {})
             w = bbox.get('width', 50)
@@ -2464,17 +3937,37 @@ def _recursive_node_to_jsx(node: Dict[str, Any], indent: int = 6, use_tailwind: 
         line_height = style.get('lineHeightPx')
         letter_spacing = style.get('letterSpacing', 0)
         text_align = style.get('textAlignHorizontal', 'LEFT').lower()
+        text_case = style.get('textCase', 'ORIGINAL')
+        text_decoration = style.get('textDecoration', 'NONE')
+
+        # Get hyperlink if present
+        hyperlink = node.get('hyperlink')
+        hyperlink_url = None
+        if hyperlink and hyperlink.get('type') == 'URL':
+            hyperlink_url = hyperlink.get('url', '')
 
         # Get text color from fills
         text_color = ''
         if fills and fills[0].get('type') == 'SOLID' and fills[0].get('visible', True):
             text_color = _rgba_to_hex(fills[0].get('color', {}))
 
+        # Convert text case and decoration to CSS
+        text_transform = _text_case_to_css(text_case)
+        text_dec_value = _text_decoration_to_css(text_decoration)
+
         if use_tailwind:
             weight_map = {300: 'font-light', 400: 'font-normal', 500: 'font-medium', 600: 'font-semibold', 700: 'font-bold', 800: 'font-extrabold', 900: 'font-black'}
             weight_class = weight_map.get(font_weight, 'font-normal')
             align_map = {'left': 'text-left', 'center': 'text-center', 'right': 'text-right', 'justified': 'text-justify'}
             align_class = align_map.get(text_align, '')
+
+            # Tailwind text-transform classes
+            transform_map = {'uppercase': 'uppercase', 'lowercase': 'lowercase', 'capitalize': 'capitalize'}
+            transform_class = transform_map.get(text_transform, '') if text_transform else ''
+
+            # Tailwind text-decoration classes
+            decoration_map = {'underline': 'underline', 'line-through': 'line-through'}
+            decoration_class = decoration_map.get(text_dec_value, '') if text_dec_value else ''
 
             classes = [f'text-[{int(font_size)}px]', weight_class]
             if text_color:
@@ -2485,11 +3978,33 @@ def _recursive_node_to_jsx(node: Dict[str, Any], indent: int = 6, use_tailwind: 
                 classes.append(f'tracking-[{letter_spacing:.2f}px]')
             if align_class:
                 classes.append(align_class)
+            if transform_class:
+                classes.append(transform_class)
+            if decoration_class:
+                classes.append(decoration_class)
+
+            # Line clamp (maxLines + textTruncation)
+            max_lines = style.get('maxLines')
+            text_truncation = style.get('textTruncation', 'DISABLED')
+            if max_lines and max_lines > 0:
+                classes.append(f'line-clamp-{max_lines}')
+                if text_truncation == 'ENDING':
+                    classes.append('text-ellipsis')
+
+            # Paragraph spacing (margin-bottom)
+            paragraph_spacing = style.get('paragraphSpacing', 0)
+            if paragraph_spacing and paragraph_spacing > 0:
+                classes.append(f'mb-[{int(paragraph_spacing)}px]')
 
             class_str = ' '.join(filter(None, classes))
             # Escape text for JSX
             escaped_text = text.replace('{', '{{').replace('}', '}}').replace('<', '&lt;').replace('>', '&gt;')
-            lines.append(f'{prefix}<span className="{class_str}">{escaped_text}</span>')
+
+            # Wrap in anchor tag if hyperlink present
+            if hyperlink_url:
+                lines.append(f'{prefix}<a href="{hyperlink_url}" className="{class_str}" target="_blank" rel="noopener noreferrer">{escaped_text}</a>')
+            else:
+                lines.append(f'{prefix}<span className="{class_str}">{escaped_text}</span>')
         else:
             styles = [f"fontSize: '{int(font_size)}px'", f"fontWeight: {font_weight}"]
             if text_color:
@@ -2502,10 +4017,35 @@ def _recursive_node_to_jsx(node: Dict[str, Any], indent: int = 6, use_tailwind: 
                 styles.append(f"letterSpacing: '{letter_spacing:.2f}px'")
             if text_align != 'left':
                 styles.append(f"textAlign: '{text_align}'")
+            if text_transform:
+                styles.append(f"textTransform: '{text_transform}'")
+            if text_dec_value:
+                styles.append(f"textDecoration: '{text_dec_value}'")
+
+            # Line clamp (maxLines + textTruncation)
+            max_lines = style.get('maxLines')
+            text_truncation = style.get('textTruncation', 'DISABLED')
+            if max_lines and max_lines > 0:
+                styles.append("display: '-webkit-box'")
+                styles.append(f"WebkitLineClamp: {max_lines}")
+                styles.append("WebkitBoxOrient: 'vertical'")
+                styles.append("overflow: 'hidden'")
+                if text_truncation == 'ENDING':
+                    styles.append("textOverflow: 'ellipsis'")
+
+            # Paragraph spacing (margin-bottom)
+            paragraph_spacing = style.get('paragraphSpacing', 0)
+            if paragraph_spacing and paragraph_spacing > 0:
+                styles.append(f"marginBottom: '{int(paragraph_spacing)}px'")
 
             style_str = ', '.join(styles)
             escaped_text = text.replace('{', '{{').replace('}', '}}').replace('<', '&lt;').replace('>', '&gt;')
-            lines.append(f'{prefix}<span style={{{{ {style_str} }}}}>{escaped_text}</span>')
+
+            # Wrap in anchor tag if hyperlink present
+            if hyperlink_url:
+                lines.append(f'{prefix}<a href="{hyperlink_url}" style={{{{ {style_str} }}}} target="_blank" rel="noopener noreferrer">{escaped_text}</a>')
+            else:
+                lines.append(f'{prefix}<span style={{{{ {style_str} }}}}>{escaped_text}</span>')
 
     elif node_type == 'VECTOR' or node_type == 'BOOLEAN_OPERATION':
         # For vector/icon nodes, create a placeholder or use SVG
@@ -2543,16 +4083,13 @@ def _recursive_node_to_jsx(node: Dict[str, Any], indent: int = 6, use_tailwind: 
             if height:
                 classes.append(f'h-[{height}px]')
 
-            # Background (solid color or gradient)
+            # Background (solid color, gradient, image, or layered)
             if bg_value and bg_type:
                 if bg_type == 'color':
                     classes.append(f'bg-[{bg_value}]')
-                elif bg_type == 'gradient':
-                    # Gradients need inline style in Tailwind
+                elif bg_type in ('gradient', 'image', 'layered'):
+                    # Gradients, images, and layered backgrounds need inline style
                     inline_styles.append(f"background: '{bg_value}'")
-                elif bg_type == 'image':
-                    # Image placeholder
-                    inline_styles.append(f"/* {bg_value} */")
 
             # Corner radius (with individual corners)
             if corner_radius_css:
@@ -2609,6 +4146,20 @@ def _recursive_node_to_jsx(node: Dict[str, Any], indent: int = 6, use_tailwind: 
                 if padding_left:
                     classes.append(f'pl-[{padding_left}px]')
 
+            # Flex child properties (layoutGrow, layoutPositioning, layoutAlign)
+            layout_grow = node.get('layoutGrow', 0)
+            layout_positioning = node.get('layoutPositioning')
+            layout_align = node.get('layoutAlign')
+
+            if layout_grow and layout_grow > 0:
+                classes.append('grow')  # Tailwind: flex-grow: 1
+            if layout_positioning == 'ABSOLUTE':
+                classes.append('absolute')
+            if layout_align == 'STRETCH':
+                classes.append('self-stretch')
+            elif layout_align == 'INHERIT':
+                classes.append('self-auto')
+
             class_str = ' '.join(filter(None, classes))
 
             # Combine className and style if needed
@@ -2624,14 +4175,13 @@ def _recursive_node_to_jsx(node: Dict[str, Any], indent: int = 6, use_tailwind: 
             if height:
                 styles.append(f"height: '{height}px'")
 
-            # Background (solid color or gradient)
+            # Background (solid color, gradient, image, or layered)
             if bg_value and bg_type:
                 if bg_type == 'color':
                     styles.append(f"backgroundColor: '{bg_value}'")
-                elif bg_type == 'gradient':
+                elif bg_type in ('gradient', 'image', 'layered'):
+                    # Gradients, images, and layered backgrounds use 'background' shorthand
                     styles.append(f"background: '{bg_value}'")
-                elif bg_type == 'image':
-                    styles.append(f"/* {bg_value} */")
 
             # Corner radius (with individual corners)
             if corner_radius_css:
@@ -2678,6 +4228,20 @@ def _recursive_node_to_jsx(node: Dict[str, Any], indent: int = 6, use_tailwind: 
             # Padding
             if padding_top or padding_right or padding_bottom or padding_left:
                 styles.append(f"padding: '{padding_top}px {padding_right}px {padding_bottom}px {padding_left}px'")
+
+            # Flex child properties (layoutGrow, layoutPositioning, layoutAlign)
+            layout_grow = node.get('layoutGrow', 0)
+            layout_positioning = node.get('layoutPositioning')
+            layout_align = node.get('layoutAlign')
+
+            if layout_grow and layout_grow > 0:
+                styles.append(f"flexGrow: {layout_grow}")
+            if layout_positioning == 'ABSOLUTE':
+                styles.append("position: 'absolute'")
+            if layout_align == 'STRETCH':
+                styles.append("alignSelf: 'stretch'")
+            elif layout_align == 'INHERIT':
+                styles.append("alignSelf: 'auto'")
 
             style_str = ', '.join(styles)
             lines.append(f'{prefix}<div style={{{{ {style_str} }}}}>')
@@ -2839,8 +4403,12 @@ async def figma_get_node_details(params: FigmaNodeInput) -> str:
             'locked': node.get('locked', False)
         }
 
-        # Bounds
+        # Bounds (comprehensive: bounding box, render bounds, transform, size)
         bbox = node.get('absoluteBoundingBox', {})
+        render_bounds = node.get('absoluteRenderBounds')  # Actual visual bounds including effects
+        relative_transform = node.get('relativeTransform')
+        node_size = node.get('size')
+
         if bbox:
             node_details['bounds'] = {
                 'width': round(bbox.get('width', 0), 2),
@@ -2848,6 +4416,26 @@ async def figma_get_node_details(params: FigmaNodeInput) -> str:
                 'x': round(bbox.get('x', 0), 2),
                 'y': round(bbox.get('y', 0), 2)
             }
+
+            # Render bounds (includes effects like shadows - actual visual footprint)
+            if render_bounds:
+                node_details['bounds']['renderBounds'] = {
+                    'width': round(render_bounds.get('width', 0), 2),
+                    'height': round(render_bounds.get('height', 0), 2),
+                    'x': round(render_bounds.get('x', 0), 2),
+                    'y': round(render_bounds.get('y', 0), 2)
+                }
+
+            # Relative transform (2x3 transformation matrix)
+            if relative_transform:
+                node_details['bounds']['relativeTransform'] = relative_transform
+
+            # Node size (width, height before transforms)
+            if node_size:
+                node_details['bounds']['size'] = {
+                    'width': round(node_size.get('x', 0), 2),
+                    'height': round(node_size.get('y', 0), 2)
+                }
 
         # Blend mode
         if 'blendMode' in node:
@@ -2910,6 +4498,11 @@ async def figma_get_node_details(params: FigmaNodeInput) -> str:
         if 'clipsContent' in node:
             node_details['clipsContent'] = node['clipsContent']
 
+        # Mask info
+        mask_data = _extract_mask_data(node)
+        if mask_data:
+            node_details['mask'] = mask_data
+
         # Component/Instance info
         component_info = _extract_component_info(node)
         if component_info:
@@ -2919,6 +4512,26 @@ async def figma_get_node_details(params: FigmaNodeInput) -> str:
         bound_variables = _extract_bound_variables(node)
         if bound_variables:
             node_details['boundVariables'] = bound_variables
+
+        # Export settings
+        export_settings = _extract_export_settings(node)
+        if export_settings:
+            node_details['exportSettings'] = export_settings
+
+        # Interactions (prototype triggers and actions)
+        interactions = _extract_interactions(node)
+        if interactions:
+            node_details['interactions'] = interactions
+
+        # Vector paths (for SVG export)
+        vector_paths = _extract_vector_paths(node)
+        if vector_paths:
+            node_details['vectorPaths'] = vector_paths
+
+        # Image references (for image fill resolution)
+        image_refs = _extract_image_references(node, params.file_key)
+        if image_refs:
+            node_details['imageReferences'] = image_refs
 
         # Text-specific properties
         if node.get('type') == 'TEXT':
@@ -2945,6 +4558,16 @@ async def figma_get_node_details(params: FigmaNodeInput) -> str:
             }
             # Clean up None values
             node_details['text'] = {k: v for k, v in node_details['text'].items() if v is not None}
+
+        # Implementation hints (AI-friendly guidance)
+        impl_hints = _generate_implementation_hints(node, interactions)
+        if impl_hints:
+            node_details['implementationHints'] = impl_hints
+
+        # Accessibility checks
+        a11y_issues = _check_accessibility(node)
+        if a11y_issues:
+            node_details['accessibility'] = a11y_issues
 
         # Children count
         children = node.get('children', [])
@@ -3165,6 +4788,58 @@ async def figma_get_node_details(params: FigmaNodeInput) -> str:
                 lines.append(f"- **Auto Resize:** {txt['textAutoResize']}")
             lines.append("")
 
+        # Implementation Hints
+        if 'implementationHints' in node_details:
+            hints = node_details['implementationHints']
+            lines.append("## 🚀 Implementation Hints")
+            if hints.get('layout'):
+                lines.append("### Layout")
+                for hint in hints['layout']:
+                    lines.append(f"- {hint}")
+            if hints.get('responsive'):
+                lines.append("### Responsive")
+                for hint in hints['responsive']:
+                    lines.append(f"- {hint}")
+            if hints.get('interactions'):
+                lines.append("### Interactions")
+                for hint in hints['interactions']:
+                    lines.append(f"- {hint}")
+            if hints.get('accessibility'):
+                lines.append("### Accessibility")
+                for hint in hints['accessibility']:
+                    lines.append(f"- {hint}")
+            if hints.get('components'):
+                lines.append("### Components")
+                for hint in hints['components']:
+                    lines.append(f"- {hint}")
+            lines.append("")
+
+        # Accessibility Warnings
+        if 'accessibility' in node_details:
+            a11y = node_details['accessibility']
+            lines.append("## ♿ Accessibility")
+            if a11y.get('contrast_issues'):
+                lines.append("### Contrast Issues")
+                for issue in a11y['contrast_issues']:
+                    severity_icon = "❌" if issue.get('severity') == 'error' else "⚠️" if issue.get('severity') == 'warning' else "ℹ️"
+                    lines.append(f"- {severity_icon} {issue.get('message')}")
+                    if issue.get('wcag'):
+                        lines.append(f"  - WCAG: {issue['wcag']}")
+            if a11y.get('touch_target_warnings'):
+                lines.append("### Touch Target Issues")
+                for issue in a11y['touch_target_warnings']:
+                    severity_icon = "❌" if issue.get('severity') == 'error' else "⚠️"
+                    lines.append(f"- {severity_icon} {issue.get('message')}")
+                    if issue.get('wcag'):
+                        lines.append(f"  - WCAG: {issue['wcag']}")
+            if a11y.get('label_warnings'):
+                lines.append("### Label Warnings")
+                for issue in a11y['label_warnings']:
+                    lines.append(f"- ⚠️ {issue.get('message')}")
+                    if issue.get('wcag'):
+                        lines.append(f"  - WCAG: {issue['wcag']}")
+            lines.append("")
+
         # Children count
         if 'childrenCount' in node_details:
             lines.append(f"**Children:** {node_details['childrenCount']} child node(s)")
@@ -3341,6 +5016,19 @@ async def figma_get_design_tokens(params: FigmaDesignTokensInput) -> str:
             'tokens': tokens
         }
 
+        # Generate ready-to-use code if requested
+        if params.include_generated_code:
+            colors_list = tokens.get('colors', [])
+            typography_list = tokens.get('typography', [])
+            spacing_list = tokens.get('spacing', [])
+            shadows_list = tokens.get('shadows', [])
+
+            formatted_tokens['generated'] = {
+                'css_variables': _generate_css_variables(colors_list, typography_list, spacing_list, shadows_list),
+                'scss_variables': _generate_scss_variables(colors_list, typography_list, spacing_list, shadows_list),
+                'tailwind_config': _generate_tailwind_config(colors_list, typography_list, shadows_list)
+            }
+
         result = json.dumps(formatted_tokens, indent=2)
 
         # Check character limit
@@ -3395,19 +5083,21 @@ async def figma_get_styles(params: FigmaStylesInput) -> str:
         if not styles:
             return "No published styles found in this file."
 
-        # Categorize styles
+        # Categorize styles and collect node IDs
         fill_styles = []
         text_styles = []
         effect_styles = []
         grid_styles = []
+        style_node_ids = []
 
         for style in styles:
             style_type = style.get('style_type', '')
+            node_id = style.get('node_id', '')
             style_data = {
                 'key': style.get('key', ''),
                 'name': style.get('name', ''),
                 'description': style.get('description', ''),
-                'node_id': style.get('node_id', ''),
+                'node_id': node_id,
                 'created_at': style.get('created_at', ''),
                 'updated_at': style.get('updated_at', ''),
                 'sort_position': style.get('sort_position', '')
@@ -3415,28 +5105,42 @@ async def figma_get_styles(params: FigmaStylesInput) -> str:
 
             if style_type == 'FILL' and params.include_fill_styles:
                 fill_styles.append(style_data)
+                if node_id:
+                    style_node_ids.append(node_id)
             elif style_type == 'TEXT' and params.include_text_styles:
                 text_styles.append(style_data)
+                if node_id:
+                    style_node_ids.append(node_id)
             elif style_type == 'EFFECT' and params.include_effect_styles:
                 effect_styles.append(style_data)
+                if node_id:
+                    style_node_ids.append(node_id)
             elif style_type == 'GRID' and params.include_grid_styles:
                 grid_styles.append(style_data)
+                if node_id:
+                    style_node_ids.append(node_id)
 
-        # Now fetch full file to get style details
-        file_data = await _make_figma_request(f"files/{params.file_key}")
-
-        # Extract style definitions from document styles
-        doc_styles = file_data.get('styles', {})
+        # Optimized: Fetch only the style nodes instead of entire file
+        # This is much faster for large files with few styles
+        nodes_data = {}
+        doc_styles = {}
+        if style_node_ids:
+            nodes_response = await _make_figma_request(
+                f"files/{params.file_key}/nodes",
+                params={"ids": ",".join(style_node_ids)}
+            )
+            nodes_data = nodes_response.get('nodes', {})
+            doc_styles = nodes_response.get('styles', {})
 
         # Enrich styles with actual values
-        def enrich_style(style_data: Dict, doc_styles: Dict, file_data: Dict) -> Dict:
+        def enrich_style(style_data: Dict, doc_styles: Dict, nodes_data: Dict) -> Dict:
             node_id = style_data.get('node_id', '')
             if node_id and node_id in doc_styles:
                 style_info = doc_styles[node_id]
                 style_data['styleType'] = style_info.get('styleType', '')
 
-            # Try to get the actual node to extract values
-            node = _find_node_by_id(file_data.get('document', {}), node_id)
+            # Get node directly from nodes_data (optimized - no tree search)
+            node = nodes_data.get(node_id, {}).get('document', {})
             if node:
                 # Extract fill details
                 if node.get('fills'):
@@ -3468,10 +5172,10 @@ async def figma_get_styles(params: FigmaStylesInput) -> str:
             return style_data
 
         # Enrich all styles
-        fill_styles = [enrich_style(s, doc_styles, file_data) for s in fill_styles]
-        text_styles = [enrich_style(s, doc_styles, file_data) for s in text_styles]
-        effect_styles = [enrich_style(s, doc_styles, file_data) for s in effect_styles]
-        grid_styles = [enrich_style(s, doc_styles, file_data) for s in grid_styles]
+        fill_styles = [enrich_style(s, doc_styles, nodes_data) for s in fill_styles]
+        text_styles = [enrich_style(s, doc_styles, nodes_data) for s in text_styles]
+        effect_styles = [enrich_style(s, doc_styles, nodes_data) for s in effect_styles]
+        grid_styles = [enrich_style(s, doc_styles, nodes_data) for s in grid_styles]
 
         # Format output
         if params.response_format == ResponseFormat.JSON:
@@ -3690,252 +5394,6 @@ async def figma_generate_code(params: FigmaCodeGenInput) -> str:
         ]
 
         return "\n".join(lines)
-
-    except Exception as e:
-        return _handle_api_error(e)
-
-
-@mcp.tool(
-    name="figma_get_colors",
-    annotations={
-        "title": "Extract Colors from Figma",
-        "readOnlyHint": True,
-        "destructiveHint": False,
-        "idempotentHint": True,
-        "openWorldHint": True
-    }
-)
-async def figma_get_colors(params: FigmaColorsInput) -> str:
-    """
-    Extract all colors (fills, strokes, shadows) from a Figma file or node.
-
-    Returns colors in both hex and rgba format for easy use in CSS/code.
-
-    Args:
-        params: FigmaColorsInput containing:
-            - file_key (str): Figma file key
-            - node_id (Optional[str]): Specific node to analyze
-            - include_fills: Include fill colors (default: True)
-            - include_strokes: Include stroke colors (default: True)
-            - include_shadows: Include shadow colors (default: True)
-
-    Returns:
-        str: JSON formatted color list with hex and rgba values
-    """
-    try:
-        # Use full file endpoint to get children data
-        data = await _make_figma_request(f"files/{params.file_key}")
-        node = _get_node_with_children(params.file_key, params.node_id, data)
-
-        if not node:
-            return f"Error: Node '{params.node_id}' not found."
-
-        result = {
-            "fills": [],
-            "strokes": [],
-            "shadows": []
-        }
-
-        # Extract fills
-        if params.include_fills:
-            colors: List[Dict[str, Any]] = []
-            _extract_colors_from_node(node, colors)
-            fill_colors = [c for c in colors if c.get('type') == 'fill']
-            # Convert to hex + rgba format
-            for c in fill_colors:
-                hex_val = c['value']
-                # Parse hex to rgba
-                if hex_val.startswith('rgba'):
-                    rgba_val = hex_val
-                elif hex_val.startswith('#'):
-                    r = int(hex_val[1:3], 16)
-                    g = int(hex_val[3:5], 16)
-                    b = int(hex_val[5:7], 16)
-                    rgba_val = f"rgba({r}, {g}, {b}, 1)"
-                else:
-                    rgba_val = hex_val
-                result["fills"].append({
-                    "name": c['name'],
-                    "hex": hex_val if hex_val.startswith('#') else None,
-                    "rgba": rgba_val
-                })
-
-        # Extract strokes
-        if params.include_strokes:
-            colors = []
-            _extract_colors_from_node(node, colors)
-            stroke_colors = [c for c in colors if c.get('type') == 'stroke']
-            for c in stroke_colors:
-                hex_val = c['value']
-                if hex_val.startswith('rgba'):
-                    rgba_val = hex_val
-                elif hex_val.startswith('#'):
-                    r = int(hex_val[1:3], 16)
-                    g = int(hex_val[3:5], 16)
-                    b = int(hex_val[5:7], 16)
-                    rgba_val = f"rgba({r}, {g}, {b}, 1)"
-                else:
-                    rgba_val = hex_val
-                result["strokes"].append({
-                    "name": c['name'],
-                    "hex": hex_val if hex_val.startswith('#') else None,
-                    "rgba": rgba_val
-                })
-
-        # Extract shadows
-        if params.include_shadows:
-            shadows: List[Dict[str, Any]] = []
-            _extract_shadows_from_node(node, shadows)
-            result["shadows"] = shadows
-
-        # Deduplicate by hex value
-        for key in ["fills", "strokes"]:
-            seen = set()
-            unique = []
-            for item in result[key]:
-                hex_key = item.get('hex') or item.get('rgba')
-                if hex_key not in seen:
-                    seen.add(hex_key)
-                    unique.append(item)
-            result[key] = unique
-
-        return json.dumps(result, indent=2)
-
-    except Exception as e:
-        return _handle_api_error(e)
-
-
-@mcp.tool(
-    name="figma_get_typography",
-    annotations={
-        "title": "Extract Typography from Figma",
-        "readOnlyHint": True,
-        "destructiveHint": False,
-        "idempotentHint": True,
-        "openWorldHint": True
-    }
-)
-async def figma_get_typography(params: FigmaTypographyInput) -> str:
-    """
-    Extract typography styles (font family, size, weight, line-height) from a Figma file.
-
-    Analyzes all TEXT nodes and returns their typography properties.
-
-    Args:
-        params: FigmaTypographyInput containing:
-            - file_key (str): Figma file key
-            - node_id (Optional[str]): Specific node to analyze
-
-    Returns:
-        str: JSON formatted typography list
-    """
-    try:
-        data = await _make_figma_request(f"files/{params.file_key}")
-        node = _get_node_with_children(params.file_key, params.node_id, data)
-
-        if not node:
-            return f"Error: Node '{params.node_id}' not found."
-
-        typography: List[Dict[str, Any]] = []
-        _extract_typography_from_node(node, typography)
-
-        # Deduplicate by font properties
-        seen = set()
-        unique = []
-        for t in typography:
-            key = f"{t.get('fontFamily')}_{t.get('fontSize')}_{t.get('fontWeight')}"
-            if key not in seen:
-                seen.add(key)
-                unique.append(t)
-
-        result = {
-            "typography": unique,
-            "summary": {
-                "fontFamilies": list(set(t.get('fontFamily', 'Unknown') for t in unique)),
-                "fontSizes": sorted(set(t.get('fontSize', 16) for t in unique)),
-                "fontWeights": sorted(set(t.get('fontWeight', 400) for t in unique))
-            }
-        }
-
-        return json.dumps(result, indent=2)
-
-    except Exception as e:
-        return _handle_api_error(e)
-
-
-@mcp.tool(
-    name="figma_get_spacing",
-    annotations={
-        "title": "Extract Spacing from Figma",
-        "readOnlyHint": True,
-        "destructiveHint": False,
-        "idempotentHint": True,
-        "openWorldHint": True
-    }
-)
-async def figma_get_spacing(params: FigmaSpacingInput) -> str:
-    """
-    Extract spacing values (padding, gap) from a Figma file.
-
-    Analyzes auto-layout frames and returns their padding and gap values.
-
-    Args:
-        params: FigmaSpacingInput containing:
-            - file_key (str): Figma file key
-            - node_id (Optional[str]): Specific node to analyze
-
-    Returns:
-        str: JSON formatted spacing list
-    """
-    try:
-        data = await _make_figma_request(f"files/{params.file_key}")
-        node = _get_node_with_children(params.file_key, params.node_id, data)
-
-        if not node:
-            return f"Error: Node '{params.node_id}' not found."
-
-        spacing: List[Dict[str, Any]] = []
-        _extract_spacing_from_node(node, spacing)
-
-        # Filter to only auto-layout items
-        auto_layout_items = [s for s in spacing if s.get('type') == 'auto-layout']
-
-        # Deduplicate by padding/gap combination
-        seen = set()
-        unique = []
-        for s in auto_layout_items:
-            key = f"{s.get('paddingTop')}_{s.get('paddingRight')}_{s.get('paddingBottom')}_{s.get('paddingLeft')}_{s.get('itemSpacing')}"
-            if key not in seen:
-                seen.add(key)
-                unique.append({
-                    "name": s['name'],
-                    "padding": {
-                        "top": s.get('paddingTop', 0),
-                        "right": s.get('paddingRight', 0),
-                        "bottom": s.get('paddingBottom', 0),
-                        "left": s.get('paddingLeft', 0)
-                    },
-                    "gap": s.get('itemSpacing', 0),
-                    "layoutMode": s.get('layoutMode', 'NONE')
-                })
-
-        # Extract unique spacing values
-        all_paddings = set()
-        all_gaps = set()
-        for s in unique:
-            padding = s['padding']
-            all_paddings.update([padding['top'], padding['right'], padding['bottom'], padding['left']])
-            all_gaps.add(s['gap'])
-
-        result = {
-            "spacing": unique,
-            "summary": {
-                "uniquePaddingValues": sorted(all_paddings),
-                "uniqueGapValues": sorted(all_gaps)
-            }
-        }
-
-        return json.dumps(result, indent=2)
 
     except Exception as e:
         return _handle_api_error(e)
@@ -4168,6 +5626,347 @@ async def figma_remove_code_connect_map(params: FigmaCodeConnectRemoveInput) -> 
             "status": "error",
             "message": str(e)
         }, indent=2)
+
+
+# ============================================================================
+# Asset Management Tools
+# ============================================================================
+
+@mcp.tool(
+    name="figma_list_assets",
+    annotations={
+        "title": "List Assets in Figma Design",
+        "readOnlyHint": True,
+        "destructiveHint": False,
+        "idempotentHint": True,
+        "openWorldHint": True
+    }
+)
+async def figma_list_assets(params: FigmaListAssetsInput) -> str:
+    """
+    List all exportable assets in a Figma file or node.
+
+    Finds and catalogs:
+    - Image fills (photos, illustrations used in design)
+    - Vector/icon nodes (SVG exportable shapes)
+    - Nodes with export settings configured
+
+    Args:
+        params: FigmaListAssetsInput containing:
+            - file_key (str): Figma file key
+            - node_id (Optional[str]): Specific node to search within
+            - include_images (bool): Include image fills
+            - include_vectors (bool): Include vectors/icons
+            - include_exports (bool): Include nodes with export settings
+
+    Returns:
+        str: Cataloged assets in requested format
+    """
+    try:
+        # Get node data
+        if params.node_id:
+            data = await _make_figma_request(
+                f"files/{params.file_key}/nodes",
+                params={"ids": params.node_id, "geometry": "paths"}
+            )
+            nodes = data.get('nodes', {})
+            root_node = nodes.get(params.node_id, {}).get('document', {})
+        else:
+            data = await _make_figma_request(
+                f"files/{params.file_key}",
+                params={"geometry": "paths"}
+            )
+            root_node = data.get('document', {})
+
+        if not root_node:
+            return "Error: Could not retrieve node data."
+
+        # Collect all assets
+        assets: Dict[str, List] = {
+            'images': [],
+            'vectors': [],
+            'exports': []
+        }
+        _collect_all_assets(root_node, params.file_key, assets)
+
+        # Filter based on params
+        if not params.include_images:
+            assets['images'] = []
+        if not params.include_vectors:
+            assets['vectors'] = []
+        if not params.include_exports:
+            assets['exports'] = []
+
+        # Return in requested format
+        if params.response_format == ResponseFormat.JSON:
+            return json.dumps({
+                "file_key": params.file_key,
+                "node_id": params.node_id,
+                "assets": assets,
+                "summary": {
+                    "total_images": len(assets['images']),
+                    "total_vectors": len(assets['vectors']),
+                    "total_exports": len(assets['exports'])
+                }
+            }, indent=2)
+
+        # Markdown format
+        lines = [
+            "# Asset Catalog",
+            f"**File:** `{params.file_key}`",
+        ]
+        if params.node_id:
+            lines.append(f"**Node:** `{params.node_id}`")
+        lines.append("")
+
+        # Summary
+        total = len(assets['images']) + len(assets['vectors']) + len(assets['exports'])
+        lines.extend([
+            "## Summary",
+            f"- **Total Assets:** {total}",
+            f"- **Images:** {len(assets['images'])}",
+            f"- **Vectors/Icons:** {len(assets['vectors'])}",
+            f"- **Export Configured:** {len(assets['exports'])}",
+            ""
+        ])
+
+        # Images
+        if assets['images']:
+            lines.extend(["## 🖼️ Image Fills", ""])
+            for img in assets['images'][:20]:  # Limit to 20
+                lines.append(f"- **{img['nodeName']}** (`{img['nodeId']}`)")
+                lines.append(f"  - imageRef: `{img['imageRef']}`")
+                lines.append(f"  - scaleMode: {img['scaleMode']}")
+            if len(assets['images']) > 20:
+                lines.append(f"- ... and {len(assets['images']) - 20} more")
+            lines.append("")
+
+        # Vectors
+        if assets['vectors']:
+            lines.extend(["## 🎨 Vectors/Icons", ""])
+            for vec in assets['vectors'][:20]:
+                lines.append(f"- **{vec['nodeName']}** (`{vec['nodeId']}`) - {vec['nodeType']}")
+            if len(assets['vectors']) > 20:
+                lines.append(f"- ... and {len(assets['vectors']) - 20} more")
+            lines.append("")
+
+        # Exports
+        if assets['exports']:
+            lines.extend(["## 📦 Export Configured", ""])
+            for exp in assets['exports'][:20]:
+                settings = exp['settings']
+                formats = [s.get('format', 'PNG') for s in settings]
+                lines.append(f"- **{exp['nodeName']}** (`{exp['nodeId']}`) - {', '.join(formats)}")
+            if len(assets['exports']) > 20:
+                lines.append(f"- ... and {len(assets['exports']) - 20} more")
+            lines.append("")
+
+        # Usage hint
+        lines.extend([
+            "---",
+            "**Tip:** Use `figma_get_images` to get actual URLs for image fills,",
+            "or `figma_export_assets` to batch export selected assets."
+        ])
+
+        return "\n".join(lines)
+
+    except Exception as e:
+        return _handle_api_error(e)
+
+
+@mcp.tool(
+    name="figma_get_images",
+    annotations={
+        "title": "Get Image Fill URLs",
+        "readOnlyHint": True,
+        "destructiveHint": False,
+        "idempotentHint": True,
+        "openWorldHint": True
+    }
+)
+async def figma_get_images(params: FigmaGetImagesInput) -> str:
+    """
+    Get actual downloadable URLs for image fills in a Figma file.
+
+    Resolves internal imageRef values to real S3 URLs that can be downloaded.
+    URLs are valid for 30 days.
+
+    Args:
+        params: FigmaGetImagesInput containing:
+            - file_key (str): Figma file key
+            - node_id (Optional[str]): Specific node to get images from
+
+    Returns:
+        str: Image URLs and their references
+    """
+    try:
+        # Get image URLs from Figma API
+        data = await _make_figma_request(
+            f"files/{params.file_key}/images"
+        )
+
+        images = data.get('meta', {}).get('images', {})
+
+        if not images:
+            return "No images found in this file. Images must be uploaded to Figma (not external links)."
+
+        # If node_id specified, filter to only images used in that node
+        if params.node_id:
+            node_data = await _make_figma_request(
+                f"files/{params.file_key}/nodes",
+                params={"ids": params.node_id}
+            )
+            nodes = node_data.get('nodes', {})
+            root_node = nodes.get(params.node_id, {}).get('document', {})
+
+            if root_node:
+                # Collect image refs from node
+                assets: Dict[str, List] = {'images': [], 'vectors': [], 'exports': []}
+                _collect_all_assets(root_node, params.file_key, assets)
+                node_image_refs = {img['imageRef'] for img in assets['images']}
+
+                # Filter to only matching images
+                images = {ref: url for ref, url in images.items() if ref in node_image_refs}
+
+        if not images:
+            return "No image fills found in the specified node."
+
+        lines = [
+            "# Image Fill URLs",
+            f"**File:** `{params.file_key}`",
+        ]
+        if params.node_id:
+            lines.append(f"**Node:** `{params.node_id}`")
+        lines.extend([
+            f"**Total Images:** {len(images)}",
+            "",
+            "## Image URLs",
+            ""
+        ])
+
+        for ref, url in images.items():
+            if url:
+                lines.append(f"### `{ref}`")
+                lines.append(f"[Download Image]({url})")
+                lines.append("")
+            else:
+                lines.append(f"### `{ref}`")
+                lines.append("⚠️ URL not available")
+                lines.append("")
+
+        lines.extend([
+            "---",
+            "> **Note:** URLs expire in 30 days. Download images before expiration.",
+            "> Use these URLs in CSS: `background-image: url('...')`"
+        ])
+
+        return "\n".join(lines)
+
+    except Exception as e:
+        return _handle_api_error(e)
+
+
+@mcp.tool(
+    name="figma_export_assets",
+    annotations={
+        "title": "Export Assets from Figma",
+        "readOnlyHint": True,
+        "destructiveHint": False,
+        "idempotentHint": True,
+        "openWorldHint": True
+    }
+)
+async def figma_export_assets(params: FigmaExportAssetsInput) -> str:
+    """
+    Batch export assets from Figma nodes.
+
+    Exports multiple nodes as images/SVGs with the specified format and scale.
+    For vector nodes, can also generate inline SVG from path data.
+
+    Args:
+        params: FigmaExportAssetsInput containing:
+            - file_key (str): Figma file key
+            - node_ids (List[str]): Node IDs to export
+            - format: 'png', 'svg', 'jpg', 'pdf'
+            - scale (float): Scale factor (0.01 to 4.0)
+            - include_svg_for_vectors (bool): Generate inline SVG for vectors
+
+    Returns:
+        str: Export URLs and generated SVGs
+    """
+    try:
+        # Get node data for vector SVG generation
+        vector_svgs = {}
+        if params.include_svg_for_vectors:
+            node_data = await _make_figma_request(
+                f"files/{params.file_key}/nodes",
+                params={"ids": ",".join(params.node_ids), "geometry": "paths"}
+            )
+            nodes = node_data.get('nodes', {})
+
+            for node_id in params.node_ids:
+                node = nodes.get(node_id, {}).get('document', {})
+                if node:
+                    vector_paths = _extract_vector_paths(node)
+                    if vector_paths:
+                        svg = _generate_svg_from_paths(vector_paths, node)
+                        if svg:
+                            vector_svgs[node_id] = {
+                                'name': node.get('name', 'Unnamed'),
+                                'svg': svg
+                            }
+
+        # Export via Figma Images API
+        ids = ",".join(params.node_ids)
+        data = await _make_figma_request(
+            f"images/{params.file_key}",
+            params={
+                "ids": ids,
+                "format": params.format.value,
+                "scale": params.scale
+            }
+        )
+
+        images = data.get('images', {})
+
+        lines = [
+            "# Asset Export Results",
+            f"**File:** `{params.file_key}`",
+            f"**Format:** {params.format.value.upper()}",
+            f"**Scale:** {params.scale}x",
+            f"**Nodes:** {len(params.node_ids)}",
+            ""
+        ]
+
+        # Export URLs
+        lines.extend(["## 📥 Download URLs", ""])
+        for node_id, url in images.items():
+            if url:
+                lines.append(f"- **{node_id}**: [Download]({url})")
+            else:
+                lines.append(f"- **{node_id}**: ⚠️ Export failed")
+        lines.append("")
+
+        # Inline SVGs for vectors
+        if vector_svgs:
+            lines.extend(["## 🎨 Generated SVG (from path data)", ""])
+            for node_id, svg_data in vector_svgs.items():
+                lines.append(f"### {svg_data['name']} (`{node_id}`)")
+                lines.append("```svg")
+                lines.append(svg_data['svg'])
+                lines.append("```")
+                lines.append("")
+
+        lines.extend([
+            "---",
+            "> **Note:** Download URLs expire in 30 days.",
+            "> Generated SVGs are created from path geometry and may differ from Figma's SVG export."
+        ])
+
+        return "\n".join(lines)
+
+    except Exception as e:
+        return _handle_api_error(e)
 
 
 # ============================================================================
