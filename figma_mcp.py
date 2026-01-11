@@ -123,31 +123,8 @@ TAILWIND_ALIGN_MAP = {
 
 # Max children limit for recursive operations
 MAX_CHILDREN_LIMIT = 20
+MAX_NATIVE_CHILDREN_LIMIT = 10  # Limit for SwiftUI/Kotlin to avoid excessive code
 
-
-# ============================================================================
-# Color Utility Functions
-# ============================================================================
-
-def _color_to_rgb255(color: Dict[str, float]) -> Tuple[int, int, int]:
-    """Convert Figma color (0-1 range) to RGB255 (0-255 range)."""
-    return (
-        int(color.get('r', 0) * 255),
-        int(color.get('g', 0) * 255),
-        int(color.get('b', 0) * 255)
-    )
-
-
-def _color_to_hex(color: Dict[str, float]) -> str:
-    """Convert Figma color (0-1 range) to hex string."""
-    r, g, b = _color_to_rgb255(color)
-    return f"#{r:02X}{g:02X}{b:02X}"
-
-
-def _color_to_rgba_str(color: Dict[str, float], opacity: float = 1.0) -> str:
-    """Convert Figma color to rgba() string."""
-    r, g, b = _color_to_rgb255(color)
-    return f"rgba({r}, {g}, {b}, {opacity})"
 
 # ============================================================================
 # Initialize MCP Server
@@ -2409,10 +2386,8 @@ def _recursive_node_to_vue_template(node: Dict[str, Any], indent: int = 4, use_t
         text_truncation = style.get('textTruncation', 'DISABLED')
 
         if use_tailwind:
-            weight_map = {300: 'font-light', 400: 'font-normal', 500: 'font-medium', 600: 'font-semibold', 700: 'font-bold', 800: 'font-extrabold', 900: 'font-black'}
-            weight_class = weight_map.get(font_weight, 'font-normal')
-            align_map = {'left': 'text-left', 'center': 'text-center', 'right': 'text-right', 'justified': 'text-justify'}
-            align_class = align_map.get(text_align, '')
+            weight_class = TAILWIND_WEIGHT_MAP.get(font_weight, 'font-normal')
+            align_class = TAILWIND_ALIGN_MAP.get(text_align.upper(), '')
 
             # Tailwind text-transform classes
             transform_map = {'uppercase': 'uppercase', 'lowercase': 'lowercase', 'capitalize': 'capitalize'}
@@ -2541,7 +2516,7 @@ def _recursive_node_to_vue_template(node: Dict[str, Any], indent: int = 4, use_t
             lines.append(f'{prefix}<div class="{class_name}">')
 
         children = node.get('children', [])
-        for child in children[:20]:
+        for child in children[:MAX_CHILDREN_LIMIT]:
             child_template = _recursive_node_to_vue_template(child, indent + 2, use_tailwind)
             if child_template:
                 lines.append(child_template)
@@ -3352,7 +3327,7 @@ def _generate_swiftui_children(children: List[Dict[str, Any]], indent: int = 12)
     lines = []
     prefix = ' ' * indent
 
-    for child in children[:10]:  # Limit to 10 children
+    for child in children[:MAX_NATIVE_CHILDREN_LIMIT]:
         node_type = child.get('type', '')
         name = child.get('name', 'Unknown')
 
@@ -3370,8 +3345,7 @@ def _generate_swiftui_children(children: List[Dict[str, Any]], indent: int = 12)
             if hyperlink and hyperlink.get('type') == 'URL':
                 hyperlink_url = hyperlink.get('url', '')
 
-            weight_map = {300: '.light', 400: '.regular', 500: '.medium', 600: '.semibold', 700: '.bold'}
-            weight = weight_map.get(font_weight, '.regular')
+            weight = SWIFTUI_WEIGHT_MAP.get(font_weight, '.regular')
 
             # Use Link if hyperlink present, otherwise Text
             if hyperlink_url:
@@ -3659,7 +3633,7 @@ def _generate_kotlin_children(children: List[Dict[str, Any]], indent: int = 8) -
     lines = []
     prefix = ' ' * indent
 
-    for child in children[:10]:  # Limit to 10 children
+    for child in children[:MAX_NATIVE_CHILDREN_LIMIT]:
         node_type = child.get('type', '')
         name = child.get('name', 'Unknown')
 
@@ -3678,15 +3652,7 @@ def _generate_kotlin_children(children: List[Dict[str, Any]], indent: int = 8) -
                 hyperlink_url = hyperlink.get('url', '')
 
             # Build Kotlin weight
-            kotlin_weight = 'FontWeight.Normal'
-            if font_weight >= 700:
-                kotlin_weight = 'FontWeight.Bold'
-            elif font_weight >= 600:
-                kotlin_weight = 'FontWeight.SemiBold'
-            elif font_weight >= 500:
-                kotlin_weight = 'FontWeight.Medium'
-            elif font_weight <= 300:
-                kotlin_weight = 'FontWeight.Light'
+            kotlin_weight = KOTLIN_WEIGHT_MAP.get(font_weight, 'FontWeight.Normal')
 
             # Build text decoration
             text_dec_kotlin = 'TextDecoration.None'
@@ -3863,10 +3829,8 @@ def _recursive_node_to_jsx(node: Dict[str, Any], indent: int = 6, use_tailwind: 
         text_dec_value = _text_decoration_to_css(text_decoration)
 
         if use_tailwind:
-            weight_map = {300: 'font-light', 400: 'font-normal', 500: 'font-medium', 600: 'font-semibold', 700: 'font-bold', 800: 'font-extrabold', 900: 'font-black'}
-            weight_class = weight_map.get(font_weight, 'font-normal')
-            align_map = {'left': 'text-left', 'center': 'text-center', 'right': 'text-right', 'justified': 'text-justify'}
-            align_class = align_map.get(text_align, '')
+            weight_class = TAILWIND_WEIGHT_MAP.get(font_weight, 'font-normal')
+            align_class = TAILWIND_ALIGN_MAP.get(text_align.upper(), '')
 
             # Tailwind text-transform classes
             transform_map = {'uppercase': 'uppercase', 'lowercase': 'lowercase', 'capitalize': 'capitalize'}
@@ -4155,7 +4119,7 @@ def _recursive_node_to_jsx(node: Dict[str, Any], indent: int = 6, use_tailwind: 
 
         # Recursively add children
         children = node.get('children', [])
-        for child in children[:20]:  # Limit to 20 children for safety
+        for child in children[:MAX_CHILDREN_LIMIT]:  # Limit to 20 children for safety
             child_jsx = _recursive_node_to_jsx(child, indent + 2, use_tailwind)
             if child_jsx:
                 lines.append(child_jsx)
