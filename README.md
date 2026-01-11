@@ -485,6 +485,12 @@ https://www.figma.com/design/qyFsYyLyBsutXGGzZ9PLCp/My-Design
 
 ## 🆕 What's New in v2.3.x
 
+### v2.3.4 - Smart Asset Detection
+- **Smart Icon Detection**: `figma_list_assets` now intelligently detects icon frames by name pattern (e.g., `mynaui:image-solid`) and size/structure heuristics
+- **New `include_icons` parameter**: Enabled by default, detects icon frames and treats them as single assets instead of drilling into individual vector paths
+- **Changed default**: `include_vectors` now defaults to `false` (raw vectors usually not needed when icon detection is enabled)
+- **Improved output**: Icons displayed in table format with name, node ID, type, and size
+
 ### v2.3.3 - Bug Fix
 - **Fixed KeyError**: Resolved `KeyError: 'value'` in `figma_get_design_tokens` color deduplication
 - **Robust dedup keys**: Color deduplication now handles all fill types (solid, gradient, image)

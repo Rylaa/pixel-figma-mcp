@@ -361,9 +361,13 @@ class FigmaListAssetsInput(BaseModel):
         default=True,
         description="Include image fills in results"
     )
-    include_vectors: bool = Field(
+    include_icons: bool = Field(
         default=True,
-        description="Include vector/icon nodes in results"
+        description="Include detected icon frames (smart detection by name pattern and size)"
+    )
+    include_vectors: bool = Field(
+        default=False,
+        description="Include raw vector nodes (individual paths). Usually not needed when include_icons=True"
     )
     include_exports: bool = Field(
         default=True,
@@ -1022,15 +1026,80 @@ def _generate_svg_from_paths(vector_paths: Dict[str, Any], node: Dict[str, Any])
     return '\n'.join(svg_parts)
 
 
-def _collect_all_assets(node: Dict[str, Any], file_key: str, assets: Dict[str, List]) -> None:
-    """Recursively collect all assets from a node tree.
+def _is_icon_frame(node: Dict[str, Any]) -> bool:
+    """Detect if a node is likely an icon frame.
 
-    Finds image fills, vectors, and nodes with export settings.
+    Uses smart heuristics to identify icon frames:
+    1. Name pattern: Contains ':' (icon library pattern like 'mynaui:image-solid')
+    2. Size: Reasonable icon size (8-128px, roughly square)
+    3. Structure: Has vector children (actual icon content)
+
+    Args:
+        node: The node to check
+
+    Returns:
+        True if the node appears to be an icon frame
+    """
+    node_name = node.get('name', '')
+    node_type = node.get('type', '')
+
+    # Must be a frame or group type
+    if node_type not in ['FRAME', 'GROUP', 'COMPONENT', 'INSTANCE']:
+        return False
+
+    # Check for icon library naming pattern (contains ':')
+    has_icon_pattern = ':' in node_name
+
+    # Check size - icons are typically 8-128px and roughly square
+    abs_box = node.get('absoluteBoundingBox', {})
+    width = abs_box.get('width', 0)
+    height = abs_box.get('height', 0)
+
+    is_icon_size = False
+    if width > 0 and height > 0:
+        min_dim = min(width, height)
+        max_dim = max(width, height)
+        # Icon size range (8-128px) and aspect ratio close to 1:1 (allow up to 1.5:1)
+        is_icon_size = 8 <= min_dim <= 128 and max_dim / min_dim <= 1.5
+
+    # Check if has vector children (actual icon content)
+    vector_types = {'VECTOR', 'BOOLEAN_OPERATION', 'STAR', 'POLYGON', 'ELLIPSE', 'LINE', 'REGULAR_POLYGON'}
+    has_vector_children = False
+    for child in node.get('children', []):
+        if child.get('type') in vector_types:
+            has_vector_children = True
+            break
+        # Also check nested children (for grouped icons)
+        for grandchild in child.get('children', []):
+            if grandchild.get('type') in vector_types:
+                has_vector_children = True
+                break
+
+    # Icon detection logic:
+    # - If has icon library naming pattern → likely icon
+    # - If icon-sized frame with vector children → likely icon
+    return has_icon_pattern or (is_icon_size and has_vector_children)
+
+
+def _collect_all_assets(
+    node: Dict[str, Any],
+    file_key: str,
+    assets: Dict[str, List],
+    include_icons: bool = True,
+    include_vectors: bool = False
+) -> None:
+    """Recursively collect all assets from a node tree with smart icon detection.
+
+    Finds image fills, icon frames, raw vectors, and nodes with export settings.
+    When an icon frame is detected, it's added to the icons list and children
+    are NOT traversed (avoiding duplicate vector entries).
 
     Args:
         node: The node to process
         file_key: Figma file key
         assets: Dict to accumulate assets into (modified in place)
+        include_icons: Whether to detect and collect icon frames
+        include_vectors: Whether to collect raw vector nodes
     """
     node_id = node.get('id', '')
     node_name = node.get('name', 'Unnamed')
@@ -1048,15 +1117,29 @@ def _collect_all_assets(node: Dict[str, Any], file_key: str, assets: Dict[str, L
                 'filters': img.get('filters')
             })
 
-    # Check for vector paths (SVG exportable)
-    vector_paths = _extract_vector_paths(node)
-    if vector_paths:
-        assets['vectors'].append({
+    # Smart icon detection - if this is an icon frame, add it and DON'T recurse
+    if include_icons and _is_icon_frame(node):
+        abs_box = node.get('absoluteBoundingBox', {})
+        assets['icons'].append({
             'nodeId': node_id,
             'nodeName': node_name,
             'nodeType': node_type,
-            'hasPath': bool(vector_paths.get('fillGeometry') or vector_paths.get('strokeGeometry'))
+            'width': abs_box.get('width', 0),
+            'height': abs_box.get('height', 0)
         })
+        # Don't recurse into icon children - we treat the icon as a single asset
+        return
+
+    # Check for vector paths (SVG exportable) - only if include_vectors is True
+    if include_vectors:
+        vector_paths = _extract_vector_paths(node)
+        if vector_paths:
+            assets['vectors'].append({
+                'nodeId': node_id,
+                'nodeName': node_name,
+                'nodeType': node_type,
+                'hasPath': bool(vector_paths.get('fillGeometry') or vector_paths.get('strokeGeometry'))
+            })
 
     # Check for export settings
     export_settings = _extract_export_settings(node)
@@ -1069,7 +1152,7 @@ def _collect_all_assets(node: Dict[str, Any], file_key: str, assets: Dict[str, L
 
     # Recurse into children
     for child in node.get('children', []):
-        _collect_all_assets(child, file_key, assets)
+        _collect_all_assets(child, file_key, assets, include_icons, include_vectors)
 
 
 def _extract_vector_paths(node: Dict[str, Any]) -> Optional[Dict[str, Any]]:
@@ -5525,11 +5608,16 @@ async def figma_remove_code_connect_map(params: FigmaCodeConnectRemoveInput) -> 
 )
 async def figma_list_assets(params: FigmaListAssetsInput) -> str:
     """
-    List all exportable assets in a Figma file or node.
+    List all exportable assets in a Figma file or node with smart icon detection.
+
+    Uses intelligent heuristics to detect icon frames (by name pattern like 'mynaui:icon'
+    or by size/structure) and treats them as single assets instead of drilling into
+    individual vector paths.
 
     Finds and catalogs:
     - Image fills (photos, illustrations used in design)
-    - Vector/icon nodes (SVG exportable shapes)
+    - Icon frames (smart detected by name pattern or size/structure)
+    - Raw vector nodes (individual SVG paths, disabled by default)
     - Nodes with export settings configured
 
     Args:
@@ -5537,7 +5625,8 @@ async def figma_list_assets(params: FigmaListAssetsInput) -> str:
             - file_key (str): Figma file key
             - node_id (Optional[str]): Specific node to search within
             - include_images (bool): Include image fills
-            - include_vectors (bool): Include vectors/icons
+            - include_icons (bool): Smart detect icon frames (recommended)
+            - include_vectors (bool): Include raw vector paths (usually not needed)
             - include_exports (bool): Include nodes with export settings
 
     Returns:
@@ -5562,17 +5651,26 @@ async def figma_list_assets(params: FigmaListAssetsInput) -> str:
         if not root_node:
             return "Error: Could not retrieve node data."
 
-        # Collect all assets
+        # Collect all assets with smart icon detection
         assets: Dict[str, List] = {
             'images': [],
+            'icons': [],
             'vectors': [],
             'exports': []
         }
-        _collect_all_assets(root_node, params.file_key, assets)
+        _collect_all_assets(
+            root_node,
+            params.file_key,
+            assets,
+            include_icons=params.include_icons,
+            include_vectors=params.include_vectors
+        )
 
         # Filter based on params
         if not params.include_images:
             assets['images'] = []
+        if not params.include_icons:
+            assets['icons'] = []
         if not params.include_vectors:
             assets['vectors'] = []
         if not params.include_exports:
@@ -5586,6 +5684,7 @@ async def figma_list_assets(params: FigmaListAssetsInput) -> str:
                 "assets": assets,
                 "summary": {
                     "total_images": len(assets['images']),
+                    "total_icons": len(assets['icons']),
                     "total_vectors": len(assets['vectors']),
                     "total_exports": len(assets['exports'])
                 }
@@ -5601,12 +5700,13 @@ async def figma_list_assets(params: FigmaListAssetsInput) -> str:
         lines.append("")
 
         # Summary
-        total = len(assets['images']) + len(assets['vectors']) + len(assets['exports'])
+        total = len(assets['images']) + len(assets['icons']) + len(assets['vectors']) + len(assets['exports'])
         lines.extend([
             "## Summary",
             f"- **Total Assets:** {total}",
             f"- **Images:** {len(assets['images'])}",
-            f"- **Vectors/Icons:** {len(assets['vectors'])}",
+            f"- **Icons:** {len(assets['icons'])}",
+            f"- **Raw Vectors:** {len(assets['vectors'])}",
             f"- **Export Configured:** {len(assets['exports'])}",
             ""
         ])
@@ -5622,9 +5722,21 @@ async def figma_list_assets(params: FigmaListAssetsInput) -> str:
                 lines.append(f"- ... and {len(assets['images']) - 20} more")
             lines.append("")
 
-        # Vectors
+        # Icons (smart detected)
+        if assets['icons']:
+            lines.extend(["## 🎯 Icons (Smart Detected)", ""])
+            lines.append("| Name | Node ID | Type | Size |")
+            lines.append("|------|---------|------|------|")
+            for icon in assets['icons'][:30]:  # Limit to 30
+                size = f"{int(icon['width'])}x{int(icon['height'])}"
+                lines.append(f"| {icon['nodeName']} | `{icon['nodeId']}` | {icon['nodeType']} | {size} |")
+            if len(assets['icons']) > 30:
+                lines.append(f"\n... and {len(assets['icons']) - 30} more icons")
+            lines.append("")
+
+        # Raw Vectors (only if explicitly requested)
         if assets['vectors']:
-            lines.extend(["## 🎨 Vectors/Icons", ""])
+            lines.extend(["## 🎨 Raw Vectors", ""])
             for vec in assets['vectors'][:20]:
                 lines.append(f"- **{vec['nodeName']}** (`{vec['nodeId']}`) - {vec['nodeType']}")
             if len(assets['vectors']) > 20:
