@@ -483,6 +483,24 @@ https://www.figma.com/design/qyFsYyLyBsutXGGzZ9PLCp/My-Design
 
 ---
 
+## 🆕 What's New in v2.3.x
+
+### v2.3.2 - Code Quality Improvements
+- **Removed unused functions**: Cleaned up `_color_to_rgb255`, `_color_to_hex`, `_color_to_rgba_str`
+- **DRY improvements**: Consolidated inline weight maps to global constants
+- **Magic number elimination**: Replaced hardcoded limits with named constants
+
+### v2.3.1 - Network Resilience
+- **Retry mechanism**: Added exponential backoff retry for network errors
+- **DNS error handling**: Graceful recovery from intermittent DNS resolution failures
+- **Improved error messages**: Clearer error descriptions for connection issues
+
+### v2.3.0 - Validator Consolidation
+- **Consolidated validators**: Unified validation helpers for cleaner codebase
+- **Code organization**: Better structured helper functions
+
+---
+
 ## 🆕 What's New in v2.2.0
 
 ### 📦 Asset Management System
