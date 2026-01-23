@@ -473,7 +473,9 @@ https://www.figma.com/design/qyFsYyLyBsutXGGzZ9PLCp/My-Design
 
 ## 📝 Changelog
 
-### v2.3.7
+### v2.4.0
+- feat: smart file structure filtering with `include_empty_frames`, `min_children_count`, `mark_downloadable_assets` options
+- feat: asset detection indicator (`hasAsset`) in file structure tree
 - fix: prevent KeyError in figma_get_images by disabling icon collection
 - fix: add microseconds to timestamps to prevent filename collisions
 - fix: improve exception handling specificity in download functions
