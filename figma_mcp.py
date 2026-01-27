@@ -1097,12 +1097,55 @@ def _is_icon_frame(node: Dict[str, Any]) -> bool:
     return has_icon_pattern or (is_icon_size and has_vector_children)
 
 
+def _is_chart_or_illustration(node: Dict[str, Any]) -> bool:
+    """Detect if a node is likely a chart or illustration (not an icon).
+
+    Uses heuristics to identify charts/illustrations:
+    1. Has exportSettings configured AND larger than typical icon size
+    2. Large frame with multiple vector children (complex structure)
+
+    Args:
+        node: The node to check
+
+    Returns:
+        True if the node appears to be a chart or illustration
+    """
+    # Check size - charts are typically larger than icons
+    abs_box = node.get('absoluteBoundingBox', {})
+    width = abs_box.get('width', 0)
+    height = abs_box.get('height', 0)
+
+    # Icon size threshold - icons are typically <= 64px
+    is_icon_sized = width <= 64 and height <= 64
+    is_large = width > 50 or height > 50
+
+    # If has exportSettings AND is larger than icon size, it's likely a chart/illustration
+    # Small icons can also have exportSettings, so we check size first
+    if node.get('exportSettings') and not is_icon_sized:
+        return True
+
+    # Count children - charts typically have multiple elements
+    children = node.get('children', [])
+    child_count = len(children)
+
+    # Count vector children
+    vector_types = {'VECTOR', 'RECTANGLE', 'ELLIPSE', 'LINE', 'BOOLEAN_OPERATION'}
+    vector_count = sum(1 for c in children if c.get('type') in vector_types)
+
+    # Chart heuristic: large frame with multiple vector children
+    if is_large and child_count >= 3 and vector_count >= 2:
+        return True
+
+    return False
+
+
 def _collect_all_assets(
     node: Dict[str, Any],
     file_key: str,
     assets: Dict[str, List],
     include_icons: bool = True,
-    include_vectors: bool = False
+    include_vectors: bool = False,
+    include_exports: bool = True  # NEW: Add parameter
 ) -> None:
     """Recursively collect all assets from a node tree with smart icon detection.
 
@@ -1116,6 +1159,7 @@ def _collect_all_assets(
         assets: Dict to accumulate assets into (modified in place)
         include_icons: Whether to detect and collect icon frames
         include_vectors: Whether to collect raw vector nodes
+        include_exports: Whether to collect nodes with export settings
     """
     node_id = node.get('id', '')
     node_name = node.get('name', 'Unnamed')
@@ -1133,8 +1177,23 @@ def _collect_all_assets(
                 'filters': img.get('filters')
             })
 
+    # FIX: Check for export settings FIRST (before icon detection)
+    # This ensures nodes with exportSettings are always collected
+    export_settings = _extract_export_settings(node)
+    has_export_settings = bool(export_settings)
+
+    if include_exports and has_export_settings:
+        assets['exports'].append({
+            'nodeId': node_id,
+            'nodeName': node_name,
+            'settings': export_settings
+        })
+
     # Smart icon detection - if this is an icon frame, add it and DON'T recurse
-    if include_icons and _is_icon_frame(node):
+    # FIX: Skip icon classification if node is a chart/illustration
+    is_chart = _is_chart_or_illustration(node)
+
+    if include_icons and not is_chart and _is_icon_frame(node):
         abs_box = node.get('absoluteBoundingBox', {})
         assets['icons'].append({
             'nodeId': node_id,
@@ -1157,18 +1216,9 @@ def _collect_all_assets(
                 'hasPath': bool(vector_paths.get('fillGeometry') or vector_paths.get('strokeGeometry'))
             })
 
-    # Check for export settings
-    export_settings = _extract_export_settings(node)
-    if export_settings:
-        assets['exports'].append({
-            'nodeId': node_id,
-            'nodeName': node_name,
-            'settings': export_settings
-        })
-
     # Recurse into children
     for child in node.get('children', []):
-        _collect_all_assets(child, file_key, assets, include_icons, include_vectors)
+        _collect_all_assets(child, file_key, assets, include_icons, include_vectors, include_exports)
 
 
 def _extract_vector_paths(node: Dict[str, Any]) -> Optional[Dict[str, Any]]:
@@ -5787,7 +5837,8 @@ async def figma_list_assets(params: FigmaListAssetsInput) -> str:
             params.file_key,
             assets,
             include_icons=params.include_icons,
-            include_vectors=params.include_vectors
+            include_vectors=params.include_vectors,
+            include_exports=params.include_exports
         )
 
         # Filter based on params
