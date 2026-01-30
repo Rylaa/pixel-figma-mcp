@@ -69,7 +69,7 @@ FigmaNodeIdList = Annotated[List[str], BeforeValidator(_normalize_node_ids)]
 # ============================================================================
 
 FIGMA_API_BASE = "https://api.figma.com/v1"
-CHARACTER_LIMIT = 25000
+CHARACTER_LIMIT = 50000
 DEFAULT_TIMEOUT = 30.0
 
 # Retry configuration for network errors
@@ -3632,308 +3632,6 @@ def _generate_scss_code(node: Dict[str, Any], component_name: str) -> str:
     return code
 
 
-def _generate_swiftui_code(node: Dict[str, Any], component_name: str) -> str:
-    """Generate SwiftUI code from Figma node with comprehensive style support."""
-    bbox = node.get('absoluteBoundingBox', {})
-    width = bbox.get('width', 100)
-    height = bbox.get('height', 100)
-
-    # Background (with gradient support)
-    fills = node.get('fills', [])
-    bg_code = ''
-    gradient_def = ''
-
-    for fill in fills:
-        if not fill.get('visible', True):
-            continue
-        fill_type = fill.get('type', '')
-
-        if fill_type == 'SOLID':
-            color = fill.get('color', {})
-            r = color.get('r', 0)
-            g = color.get('g', 0)
-            b = color.get('b', 0)
-            a = fill.get('opacity', color.get('a', 1))
-            bg_code = f"Color(red: {r:.3f}, green: {g:.3f}, blue: {b:.3f}, opacity: {a:.2f})"
-            break
-
-        elif fill_type == 'GRADIENT_LINEAR':
-            stops = fill.get('gradientStops', [])
-            if stops:
-                gradient_stops = []
-                for stop in stops:
-                    pos = stop.get('position', 0)
-                    c = stop.get('color', {})
-                    gradient_stops.append(
-                        f"Gradient.Stop(color: Color(red: {c.get('r', 0):.3f}, green: {c.get('g', 0):.3f}, blue: {c.get('b', 0):.3f}), location: {pos:.2f})"
-                    )
-                gradient_def = f'''
-    let gradient = LinearGradient(
-        stops: [
-            {(",{chr(10)}            ").join(gradient_stops)}
-        ],
-        startPoint: .leading,
-        endPoint: .trailing
-    )'''
-                bg_code = 'gradient'
-            break
-
-        elif fill_type == 'GRADIENT_RADIAL':
-            stops = fill.get('gradientStops', [])
-            if stops:
-                gradient_stops = []
-                for stop in stops:
-                    pos = stop.get('position', 0)
-                    c = stop.get('color', {})
-                    gradient_stops.append(
-                        f"Gradient.Stop(color: Color(red: {c.get('r', 0):.3f}, green: {c.get('g', 0):.3f}, blue: {c.get('b', 0):.3f}), location: {pos:.2f})"
-                    )
-                gradient_def = f'''
-    let gradient = RadialGradient(
-        stops: [
-            {(",{chr(10)}            ").join(gradient_stops)}
-        ],
-        center: .center,
-        startRadius: 0,
-        endRadius: {max(width, height) / 2}
-    )'''
-                bg_code = 'gradient'
-            break
-
-    # Individual corner radii
-    corner_radii = node.get('rectangleCornerRadii', [])
-    corner_radius = node.get('cornerRadius', 0)
-    corner_code = ''
-
-    if corner_radii and len(corner_radii) == 4:
-        tl, tr, br, bl = corner_radii
-        if tl == tr == br == bl:
-            corner_code = f'.cornerRadius({tl})' if tl > 0 else ''
-        else:
-            # SwiftUI doesn't support individual corners directly, use clipShape with custom shape
-            corner_code = f'.clipShape(RoundedCorner(topLeft: {tl}, topRight: {tr}, bottomRight: {br}, bottomLeft: {bl}))'
-    elif corner_radius:
-        corner_code = f'.cornerRadius({corner_radius})'
-
-    # Rotation
-    rotation = node.get('rotation', 0)
-    rotation_code = f'.rotationEffect(.degrees({rotation:.1f}))' if rotation != 0 else ''
-
-    # Opacity
-    opacity = node.get('opacity', 1)
-    opacity_code = f'.opacity({opacity:.2f})' if opacity < 1 else ''
-
-    # Blend mode
-    blend_mode = node.get('blendMode', 'PASS_THROUGH')
-    blend_map = {
-        'MULTIPLY': '.multiply', 'SCREEN': '.screen', 'OVERLAY': '.overlay',
-        'DARKEN': '.darken', 'LIGHTEN': '.lighten', 'COLOR_DODGE': '.colorDodge',
-        'COLOR_BURN': '.colorBurn', 'SOFT_LIGHT': '.softLight', 'HARD_LIGHT': '.hardLight',
-        'DIFFERENCE': '.difference', 'EXCLUSION': '.exclusion'
-    }
-    blend_code = f'.blendMode({blend_map[blend_mode]})' if blend_mode in blend_map else ''
-
-    # Effects (shadows and blurs)
-    effects = node.get('effects', [])
-    shadow_codes = []
-    blur_code = ''
-
-    for effect in effects:
-        if not effect.get('visible', True):
-            continue
-        effect_type = effect.get('type', '')
-
-        if effect_type == 'DROP_SHADOW':
-            color = effect.get('color', {})
-            offset_x = effect.get('offset', {}).get('x', 0)
-            offset_y = effect.get('offset', {}).get('y', 0)
-            blur = effect.get('radius', 0)
-            r, g, b = color.get('r', 0), color.get('g', 0), color.get('b', 0)
-            a = color.get('a', 0.25)
-            shadow_codes.append(
-                f'.shadow(color: Color(red: {r:.3f}, green: {g:.3f}, blue: {b:.3f}, opacity: {a:.2f}), radius: {blur}, x: {offset_x}, y: {offset_y})'
-            )
-        elif effect_type == 'LAYER_BLUR':
-            blur_code = f'.blur(radius: {effect.get("radius", 0)})'
-
-    layout_mode = node.get('layoutMode')
-    gap = node.get('itemSpacing', 0)
-    padding_top = node.get('paddingTop', 0)
-    padding_right = node.get('paddingRight', 0)
-    padding_bottom = node.get('paddingBottom', 0)
-    padding_left = node.get('paddingLeft', 0)
-
-    # Advanced alignment
-    primary_align = node.get('primaryAxisAlignItems', 'MIN')
-    counter_align = node.get('counterAxisAlignItems', 'MIN')
-
-    # Determine container type and alignment
-    container = 'VStack' if layout_mode == 'VERTICAL' else 'HStack' if layout_mode == 'HORIZONTAL' else 'ZStack'
-
-    h_align_map = {'MIN': '.leading', 'CENTER': '.center', 'MAX': '.trailing'}
-    v_align_map = {'MIN': '.top', 'CENTER': '.center', 'MAX': '.bottom'}
-
-    if layout_mode == 'VERTICAL':
-        alignment = h_align_map.get(counter_align, '.center')
-    else:
-        alignment = v_align_map.get(counter_align, '.center')
-
-    spacing_param = f"alignment: {alignment}, spacing: {gap}" if gap else f"alignment: {alignment}"
-
-    # Generate children
-    children_code = _generate_swiftui_children(node.get('children', []))
-
-    # Build modifiers
-    modifiers = []
-    modifiers.append(f'.frame(width: {int(width)}, height: {int(height)})')
-    if bg_code:
-        modifiers.append(f'.background({bg_code})')
-    if corner_code:
-        modifiers.append(corner_code)
-    modifiers.extend(shadow_codes)
-    if blur_code:
-        modifiers.append(blur_code)
-    if rotation_code:
-        modifiers.append(rotation_code)
-    if opacity_code:
-        modifiers.append(opacity_code)
-    if blend_code:
-        modifiers.append(blend_code)
-    if padding_top or padding_right or padding_bottom or padding_left:
-        modifiers.append(f'.padding(EdgeInsets(top: {padding_top}, leading: {padding_left}, bottom: {padding_bottom}, trailing: {padding_right}))')
-
-    modifiers_str = '\n        '.join(modifiers)
-
-    # Custom RoundedCorner shape if needed
-    rounded_corner_shape = ''
-    if 'RoundedCorner' in corner_code:
-        rounded_corner_shape = '''
-
-// Custom shape for individual corner radii
-struct RoundedCorner: Shape {
-    var topLeft: CGFloat = 0
-    var topRight: CGFloat = 0
-    var bottomRight: CGFloat = 0
-    var bottomLeft: CGFloat = 0
-
-    func path(in rect: CGRect) -> Path {
-        var path = Path()
-        let w = rect.size.width
-        let h = rect.size.height
-
-        path.move(to: CGPoint(x: w / 2, y: 0))
-        path.addLine(to: CGPoint(x: w - topRight, y: 0))
-        path.addArc(center: CGPoint(x: w - topRight, y: topRight), radius: topRight, startAngle: .degrees(-90), endAngle: .degrees(0), clockwise: false)
-        path.addLine(to: CGPoint(x: w, y: h - bottomRight))
-        path.addArc(center: CGPoint(x: w - bottomRight, y: h - bottomRight), radius: bottomRight, startAngle: .degrees(0), endAngle: .degrees(90), clockwise: false)
-        path.addLine(to: CGPoint(x: bottomLeft, y: h))
-        path.addArc(center: CGPoint(x: bottomLeft, y: h - bottomLeft), radius: bottomLeft, startAngle: .degrees(90), endAngle: .degrees(180), clockwise: false)
-        path.addLine(to: CGPoint(x: 0, y: topLeft))
-        path.addArc(center: CGPoint(x: topLeft, y: topLeft), radius: topLeft, startAngle: .degrees(180), endAngle: .degrees(270), clockwise: false)
-        path.closeSubpath()
-
-        return path
-    }
-}'''
-
-    code = f'''import SwiftUI
-
-struct {component_name}: View {{{gradient_def}
-    var body: some View {{
-        {container}({spacing_param}) {{
-{children_code if children_code else '            // Content'}
-        }}
-        {modifiers_str}
-    }}
-}}
-
-#Preview {{
-    {component_name}()
-}}{rounded_corner_shape}
-'''
-    return code
-
-
-def _generate_swiftui_children(children: List[Dict[str, Any]], indent: int = 12) -> str:
-    """Generate SwiftUI code for children nodes."""
-    lines = []
-    prefix = ' ' * indent
-
-    for child in children[:MAX_NATIVE_CHILDREN_LIMIT]:
-        node_type = child.get('type', '')
-        name = child.get('name', 'Unknown')
-
-        if node_type == 'TEXT':
-            text = child.get('characters', name)
-            style = child.get('style', {})
-            font_size = style.get('fontSize', 16)
-            font_weight = style.get('fontWeight', 400)
-            text_case = style.get('textCase', 'ORIGINAL')
-            text_decoration = style.get('textDecoration', 'NONE')
-
-            # Get hyperlink if present
-            hyperlink = child.get('hyperlink')
-            hyperlink_url = None
-            if hyperlink and hyperlink.get('type') == 'URL':
-                hyperlink_url = hyperlink.get('url', '')
-
-            weight = SWIFTUI_WEIGHT_MAP.get(font_weight, '.regular')
-
-            # Use Link if hyperlink present, otherwise Text
-            if hyperlink_url:
-                lines.append(f'{prefix}Link("{text}", destination: URL(string: "{hyperlink_url}")!)')
-            else:
-                lines.append(f'{prefix}Text("{text}")')
-            lines.append(f'{prefix}    .font(.system(size: {font_size}, weight: {weight}))')
-
-            # Text case (textCase)
-            text_case_modifier = _text_case_to_swiftui(text_case)
-            if text_case_modifier:
-                lines.append(f'{prefix}    {text_case_modifier}')
-
-            # Text decoration (underline/strikethrough)
-            if text_decoration == 'UNDERLINE':
-                lines.append(f'{prefix}    .underline()')
-            elif text_decoration == 'STRIKETHROUGH':
-                lines.append(f'{prefix}    .strikethrough()')
-
-            # Line limit (maxLines)
-            max_lines = style.get('maxLines')
-            text_truncation = style.get('textTruncation', 'DISABLED')
-            if max_lines and max_lines > 0:
-                lines.append(f'{prefix}    .lineLimit({max_lines})')
-                if text_truncation == 'ENDING':
-                    lines.append(f'{prefix}    .truncationMode(.tail)')
-
-            # Paragraph spacing (bottom padding)
-            paragraph_spacing = style.get('paragraphSpacing', 0)
-            if paragraph_spacing and paragraph_spacing > 0:
-                lines.append(f'{prefix}    .padding(.bottom, {int(paragraph_spacing)})')
-        elif node_type in ['FRAME', 'GROUP', 'COMPONENT', 'INSTANCE']:
-            bbox = child.get('absoluteBoundingBox', {})
-            w = bbox.get('width', 50)
-            h = bbox.get('height', 50)
-
-            fills = child.get('fills', [])
-            if fills and fills[0].get('type') == 'SOLID':
-                color = fills[0].get('color', {})
-                lines.append(f'{prefix}Rectangle()')
-                lines.append(f'{prefix}    .fill(Color(red: {color.get("r", 0):.3f}, green: {color.get("g", 0):.3f}, blue: {color.get("b", 0):.3f}))')
-                lines.append(f'{prefix}    .frame(width: {int(w)}, height: {int(h)})')
-            else:
-                lines.append(f'{prefix}// {name}')
-                lines.append(f'{prefix}Rectangle()')
-                lines.append(f'{prefix}    .frame(width: {int(w)}, height: {int(h)})')
-        elif node_type == 'RECTANGLE':
-            bbox = child.get('absoluteBoundingBox', {})
-            w = bbox.get('width', 50)
-            h = bbox.get('height', 50)
-            lines.append(f'{prefix}Rectangle()')
-            lines.append(f'{prefix}    .frame(width: {int(w)}, height: {int(h)})')
-
-    return '\n'.join(lines)
-
-
 def _generate_kotlin_code(node: Dict[str, Any], component_name: str) -> str:
     """Generate Kotlin Jetpack Compose code from Figma node with comprehensive style support."""
     bbox = node.get('absoluteBoundingBox', {})
@@ -5557,11 +5255,34 @@ async def figma_get_design_tokens(params: FigmaDesignTokensInput) -> str:
 
         # Check character limit
         if len(result) > CHARACTER_LIMIT:
-            return json.dumps({
-                'truncated': True,
-                'message': f'Result exceeded {CHARACTER_LIMIT} characters. Try specifying a node_id to narrow scope.',
-                'tokens': {k: v[:10] for k, v in tokens.items()} if tokens else {}
-            }, indent=2)
+            # Step 1: Remove generated code (CSS/SCSS/Tailwind) - usually the biggest chunk
+            if 'generated' in formatted_tokens:
+                del formatted_tokens['generated']
+                result = json.dumps(formatted_tokens, indent=2)
+
+            # Step 2: If still too large, limit each token category
+            if len(result) > CHARACTER_LIMIT:
+                max_per_category = 30
+                if isinstance(formatted_tokens.get('tokens'), dict):
+                    for key in formatted_tokens['tokens']:
+                        if isinstance(formatted_tokens['tokens'][key], list) and len(formatted_tokens['tokens'][key]) > max_per_category:
+                            total = len(formatted_tokens['tokens'][key])
+                            formatted_tokens['tokens'][key] = formatted_tokens['tokens'][key][:max_per_category]
+                            formatted_tokens['tokens'][key].append({
+                                '_truncated': True,
+                                '_message': f'{total - max_per_category} more items. Use node_id to narrow scope.'
+                            })
+                result = json.dumps(formatted_tokens, indent=2)
+
+            # Step 3: If STILL too large, hard truncate with message
+            if len(result) > CHARACTER_LIMIT:
+                formatted_tokens['_warning'] = f'Result truncated from {len(result)} chars. Use node_id parameter to narrow scope.'
+                # Keep only first 20 of each
+                if isinstance(formatted_tokens.get('tokens'), dict):
+                    for key in formatted_tokens['tokens']:
+                        if isinstance(formatted_tokens['tokens'][key], list):
+                            formatted_tokens['tokens'][key] = formatted_tokens['tokens'][key][:20]
+                result = json.dumps(formatted_tokens, indent=2)
 
         return result
 
@@ -5882,7 +5603,8 @@ async def figma_generate_code(params: FigmaCodeGenInput) -> str:
         elif params.framework == CodeFramework.SCSS:
             code = _generate_scss_code(node, component_name)
         elif params.framework == CodeFramework.SWIFTUI:
-            code = _generate_swiftui_code(node, component_name)
+            from swiftui_generator import generate_swiftui_code
+            code = generate_swiftui_code(node, component_name)
         elif params.framework == CodeFramework.KOTLIN:
             code = _generate_kotlin_code(node, component_name)
         else:
