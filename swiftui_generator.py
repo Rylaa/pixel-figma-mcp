@@ -6,16 +6,14 @@ Supports: fills (solid, gradient, image), strokes, corner radius, shadows,
 blur, opacity, blend modes, rotation, padding, auto-layout, text styling.
 """
 
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any
 
 # Import helpers from main module
 from figma_mcp import (
-    _rgba_to_hex,
     _hex_to_rgb,
     _extract_stroke_data,
     _extract_effects_data,
     _extract_corner_radii,
-    _extract_auto_layout,
     SWIFTUI_WEIGHT_MAP,
     MAX_NATIVE_CHILDREN_LIMIT,
 )
@@ -167,7 +165,9 @@ def _swiftui_stroke_modifier(node: Dict[str, Any]) -> str:
     if opacity < 1:
         color_code += f".opacity({opacity:.2f})"
 
-    return f".overlay(RoundedRectangle(cornerRadius: 0).stroke({color_code}, lineWidth: {weight}))"
+    radii = _extract_corner_radii(node)
+    corner = int(radii['topLeft']) if radii and radii.get('isUniform') else 0
+    return f".overlay(RoundedRectangle(cornerRadius: {corner}).stroke({color_code}, lineWidth: {weight}))"
 
 
 def _swiftui_corner_modifier(node: Dict[str, Any]) -> str:
@@ -330,11 +330,14 @@ def _swiftui_text_node(node: Dict[str, Any], indent: int) -> str:
 
     weight = SWIFTUI_WEIGHT_MAP.get(font_weight, '.regular')
 
+    # Escape text for Swift string literal
+    escaped_text = text.replace('\\', '\\\\').replace('"', '\\"').replace('\n', '\\n')
+
     # Text or Link
     if hyperlink_url:
-        lines.append(f'{prefix}Link("{text}", destination: URL(string: "{hyperlink_url}")!)')
+        lines.append(f'{prefix}Link("{escaped_text}", destination: URL(string: "{hyperlink_url}")!)')
     else:
-        lines.append(f'{prefix}Text("{text}")')
+        lines.append(f'{prefix}Text("{escaped_text}")')
 
     # Font
     if font_family:
@@ -440,7 +443,22 @@ def _swiftui_shape_node(node: Dict[str, Any], indent: int) -> str:
             fill_code = "// Gradient fill - apply via .fill(gradient)"
             break
 
-    lines.append(f'{prefix}{shape_name}()')
+    # Avoid double parens: RoundedRectangle already includes ()
+    if '(' in shape_name:
+        lines.append(f'{prefix}{shape_name}')
+    else:
+        lines.append(f'{prefix}{shape_name}()')
+
+    # Divider doesn't support fill/stroke
+    if shape_name == 'Divider':
+        bbox = node.get('absoluteBoundingBox', {})
+        w, h = int(bbox.get('width', 0)), int(bbox.get('height', 0))
+        if w and h:
+            lines.append(f'{prefix}    .frame(width: {w}, height: {h})')
+        for mod in _swiftui_appearance_modifiers(node):
+            lines.append(f'{prefix}    {mod}')
+        return '\n'.join(lines)
+
     if fill_code:
         lines.append(f'{prefix}    {fill_code}')
 
@@ -562,6 +580,8 @@ def _swiftui_container_node(node: Dict[str, Any], indent: int, depth: int) -> st
 
     # Collect and apply modifiers
     modifiers, gradient_def = _swiftui_collect_modifiers(node)
+    if gradient_def:
+        lines.append(gradient_def)
     for mod in modifiers:
         lines.append(f'{prefix}{mod}')
 
