@@ -737,7 +737,14 @@ def _extract_stroke_data(node: Dict[str, Any]) -> Optional[Dict[str, Any]]:
 
             stroke_colors.append(stroke_data)
 
-    return {
+    # Check for individual stroke weights
+    individual_weights = {}
+    for side, key in [('top', 'strokeTopWeight'), ('right', 'strokeRightWeight'),
+                       ('bottom', 'strokeBottomWeight'), ('left', 'strokeLeftWeight')]:
+        if key in node:
+            individual_weights[side] = node[key]
+
+    result = {
         'colors': stroke_colors,
         'weight': node.get('strokeWeight', 1),
         'align': node.get('strokeAlign', 'INSIDE'),
@@ -747,6 +754,11 @@ def _extract_stroke_data(node: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         'dashes': node.get('strokeDashes', []),
         'dashCap': node.get('strokeDashCap', 'NONE')
     }
+
+    if individual_weights:
+        result['individualWeights'] = individual_weights
+
+    return result
 
 
 def _extract_corner_radii(node: Dict[str, Any]) -> Optional[Dict[str, Any]]:
@@ -1872,6 +1884,313 @@ def _text_decoration_to_css(decoration: str) -> Optional[str]:
         'STRIKETHROUGH': 'line-through'
     }
     return decoration_map.get(decoration)
+
+
+def _build_css_ready_background(fills: List[Dict[str, Any]], node_opacity: float = 1.0) -> Optional[str]:
+    """Build CSS-ready background property from fills and node opacity."""
+    if not fills:
+        return None
+    css_parts = []
+    for fill in fills:
+        fill_type = fill.get('fillType', 'SOLID')
+        fill_opacity = fill.get('opacity', 1)
+        effective_opacity = fill_opacity * node_opacity
+        if fill_type == 'SOLID':
+            hex_color = fill.get('hex', fill.get('color', '#000000'))
+            rgb = _hex_to_rgb(hex_color)
+            if effective_opacity < 1:
+                css_parts.append(f"rgba({rgb[0]}, {rgb[1]}, {rgb[2]}, {effective_opacity:.2f})")
+            else:
+                css_parts.append(hex_color)
+        elif fill_type.startswith('GRADIENT_'):
+            gradient = fill.get('gradient', {})
+            stops = gradient.get('stops', [])
+            gradient_type = gradient.get('type', 'LINEAR')
+            stops_css = []
+            for stop in stops:
+                stop_hex = stop.get('color', '#000000')
+                stop_opacity = stop.get('opacity', 1)
+                position = stop.get('position', 0)
+                stop_rgb = _hex_to_rgb(stop_hex)
+                eff_op = stop_opacity * effective_opacity
+                if eff_op < 1:
+                    stops_css.append(f"rgba({stop_rgb[0]}, {stop_rgb[1]}, {stop_rgb[2]}, {eff_op:.2f}) {int(position * 100)}%")
+                else:
+                    stops_css.append(f"{stop_hex} {int(position * 100)}%")
+            stops_str = ', '.join(stops_css)
+            if gradient_type == 'LINEAR':
+                angle = gradient.get('angle', 0)
+                css_parts.append(f"linear-gradient({int(angle)}deg, {stops_str})")
+            elif gradient_type == 'RADIAL':
+                css_parts.append(f"radial-gradient(circle, {stops_str})")
+            elif gradient_type == 'ANGULAR':
+                css_parts.append(f"conic-gradient({stops_str})")
+            elif gradient_type == 'DIAMOND':
+                css_parts.append(f"radial-gradient(ellipse, {stops_str})")
+    if not css_parts:
+        return None
+    if len(css_parts) == 1:
+        return css_parts[0]
+    return ', '.join(css_parts)
+
+
+def _build_css_ready_border(strokes: Optional[Dict[str, Any]], corner_radii: Optional[Dict[str, Any]], node_opacity: float = 1.0) -> Optional[Dict[str, str]]:
+    """Build CSS-ready border properties from strokes and corner radii."""
+    result = {}
+    if strokes:
+        weight = strokes.get('weight', 0)
+        align = strokes.get('align', 'INSIDE')
+        colors = strokes.get('colors', [])
+        dashes = strokes.get('dashes', [])
+        if weight and colors:
+            first_color = colors[0]
+            style = 'dashed' if dashes else 'solid'
+            color_hex = first_color.get('hex', first_color.get('color', '#000000'))
+            color_opacity = first_color.get('opacity', 1)
+            effective_opacity = color_opacity * node_opacity
+            if effective_opacity < 1:
+                rgb = _hex_to_rgb(color_hex)
+                color_css = f"rgba({rgb[0]}, {rgb[1]}, {rgb[2]}, {effective_opacity:.2f})"
+            else:
+                color_css = color_hex
+            result['border'] = f"{weight}px {style} {color_css}"
+            if align == 'INSIDE':
+                result['border-style-note'] = 'box-sizing: border-box (stroke inside)'
+            elif align == 'OUTSIDE':
+                result['border-style-note'] = 'outline recommended (stroke outside)'
+            # Individual stroke weights
+            ind_weights = strokes.get('individualWeights')
+            if ind_weights:
+                for side, w in ind_weights.items():
+                    result[f'border-{side}'] = f"{w}px {style} {color_css}"
+    if corner_radii:
+        tl = corner_radii.get('topLeft', 0)
+        tr = corner_radii.get('topRight', 0)
+        br = corner_radii.get('bottomRight', 0)
+        bl = corner_radii.get('bottomLeft', 0)
+        if corner_radii.get('isUniform'):
+            result['border-radius'] = f"{int(tl)}px"
+        else:
+            result['border-radius'] = f"{int(tl)}px {int(tr)}px {int(br)}px {int(bl)}px"
+    return result if result else None
+
+
+def _build_css_ready_shadow(effects: Optional[Dict[str, Any]], node_opacity: float = 1.0) -> Optional[Dict[str, str]]:
+    """Build CSS-ready shadow and blur properties from effects."""
+    if not effects:
+        return None
+    result = {}
+    shadows = effects.get('shadows') or []
+    blurs = effects.get('blurs') or []
+    if shadows:
+        box_shadows = []
+        for shadow in shadows:
+            shadow_type = shadow.get('type', 'DROP_SHADOW')
+            offset = shadow.get('offset', {'x': 0, 'y': 0})
+            radius = shadow.get('radius', 0)
+            spread = shadow.get('spread', 0)
+            hex_color = shadow.get('hex', shadow.get('color', '#000000'))
+            rgb = _hex_to_rgb(hex_color)
+            # Preserve shadow's own alpha channel (common in Figma: rgba(0,0,0,0.25))
+            # hex_color may contain alpha info; check if original color had alpha
+            shadow_opacity = shadow.get('opacity', 1)
+            effective_shadow_opacity = shadow_opacity * node_opacity
+            color_str = f"rgba({rgb[0]}, {rgb[1]}, {rgb[2]}, {effective_shadow_opacity:.2f})"
+            inset = 'inset ' if shadow_type == 'INNER_SHADOW' else ''
+            ox = int(offset.get('x', 0))
+            oy = int(offset.get('y', 0))
+            box_shadows.append(f"{inset}{ox}px {oy}px {int(radius)}px {int(spread)}px {color_str}")
+        result['box-shadow'] = ', '.join(box_shadows)
+    if blurs:
+        for blur in blurs:
+            blur_type = blur.get('type', '')
+            blur_radius = blur.get('radius', 0)
+            if blur_type == 'LAYER_BLUR':
+                result['filter'] = f"blur({int(blur_radius)}px)"
+            elif blur_type == 'BACKGROUND_BLUR':
+                result['backdrop-filter'] = f"blur({int(blur_radius)}px)"
+    return result if result else None
+
+
+def _build_css_ready_layout(auto_layout: Optional[Dict[str, Any]], bounds: Optional[Dict[str, Any]], size_constraints: Optional[Dict[str, Any]]) -> Optional[Dict[str, str]]:
+    """Build CSS-ready layout properties from auto-layout, bounds and constraints."""
+    result = {}
+    if auto_layout:
+        mode = auto_layout.get('mode', 'HORIZONTAL')
+        result['display'] = 'flex'
+        result['flex-direction'] = 'row' if mode == 'HORIZONTAL' else 'column'
+        gap = auto_layout.get('gap', 0)
+        if gap:
+            result['gap'] = f"{int(gap)}px"
+        padding = auto_layout.get('padding', {})
+        t = int(padding.get('top', 0))
+        r = int(padding.get('right', 0))
+        b = int(padding.get('bottom', 0))
+        l = int(padding.get('left', 0))
+        if t == r == b == l:
+            if t > 0:
+                result['padding'] = f"{t}px"
+        elif t == b and r == l:
+            result['padding'] = f"{t}px {r}px"
+        else:
+            result['padding'] = f"{t}px {r}px {b}px {l}px"
+        primary = auto_layout.get('primaryAxisAlign', 'MIN')
+        counter = auto_layout.get('counterAxisAlign', 'MIN')
+        align_map = {'MIN': 'flex-start', 'CENTER': 'center', 'MAX': 'flex-end', 'SPACE_BETWEEN': 'space-between'}
+        result['justify-content'] = align_map.get(primary, 'flex-start')
+        result['align-items'] = align_map.get(counter, 'flex-start')
+        wrap = auto_layout.get('layoutWrap', 'NO_WRAP')
+        if wrap == 'WRAP':
+            result['flex-wrap'] = 'wrap'
+        primary_sizing = auto_layout.get('primaryAxisSizing', 'AUTO')
+        counter_sizing = auto_layout.get('counterAxisSizing', 'AUTO')
+        if mode == 'HORIZONTAL':
+            if primary_sizing == 'FIXED' and bounds:
+                result['width'] = f"{int(bounds.get('width', 0))}px"
+            if counter_sizing == 'FIXED' and bounds:
+                result['height'] = f"{int(bounds.get('height', 0))}px"
+        else:
+            if primary_sizing == 'FIXED' and bounds:
+                result['height'] = f"{int(bounds.get('height', 0))}px"
+            if counter_sizing == 'FIXED' and bounds:
+                result['width'] = f"{int(bounds.get('width', 0))}px"
+    elif bounds:
+        w = bounds.get('width', 0)
+        h = bounds.get('height', 0)
+        if w:
+            result['width'] = f"{int(w)}px"
+        if h:
+            result['height'] = f"{int(h)}px"
+    if size_constraints:
+        if 'minWidth' in size_constraints:
+            result['min-width'] = f"{int(size_constraints['minWidth'])}px"
+        if 'maxWidth' in size_constraints:
+            result['max-width'] = f"{int(size_constraints['maxWidth'])}px"
+        if 'minHeight' in size_constraints:
+            result['min-height'] = f"{int(size_constraints['minHeight'])}px"
+        if 'maxHeight' in size_constraints:
+            result['max-height'] = f"{int(size_constraints['maxHeight'])}px"
+    return result if result else None
+
+
+def _build_css_ready_typography(text_props: Optional[Dict[str, Any]]) -> Optional[Dict[str, str]]:
+    """Build CSS-ready typography properties from text node data."""
+    if not text_props:
+        return None
+    result = {}
+    family = text_props.get('fontFamily')
+    weight = text_props.get('fontWeight', 400)
+    size = text_props.get('fontSize')
+    line_height = text_props.get('lineHeight')
+    letter_spacing = text_props.get('letterSpacing')
+    text_align = text_props.get('textAlign')
+    text_case = text_props.get('textCase')
+    text_decoration = text_props.get('textDecoration')
+    if family and size:
+        lh_part = f"/{int(line_height)}px" if line_height else ''
+        result['font'] = f"{int(weight)} {int(size)}px{lh_part} '{family}', sans-serif"
+    if family:
+        result['font-family'] = f"'{family}', sans-serif"
+    if size:
+        result['font-size'] = f"{int(size)}px"
+    if weight:
+        result['font-weight'] = str(int(weight))
+    if line_height:
+        result['line-height'] = f"{int(line_height)}px"
+    if letter_spacing:
+        result['letter-spacing'] = f"{letter_spacing:.2f}px"
+    if text_align:
+        align_map = {'LEFT': 'left', 'CENTER': 'center', 'RIGHT': 'right', 'JUSTIFIED': 'justify'}
+        css_align = align_map.get(text_align)
+        if css_align:
+            result['text-align'] = css_align
+    if text_case and text_case != 'ORIGINAL':
+        css_case = _text_case_to_css(text_case)
+        if css_case:
+            result['text-transform'] = css_case
+    if text_decoration and text_decoration != 'NONE':
+        css_dec = _text_decoration_to_css(text_decoration)
+        if css_dec:
+            result['text-decoration'] = css_dec
+    return result if result else None
+
+
+def _transform_to_css_from_details(transform: Dict[str, Any]) -> Optional[str]:
+    """Convert extracted transform details to CSS transform string."""
+    parts = []
+    rotation = transform.get('rotation', 0)
+    if rotation:
+        angle_deg = -rotation * (180 / 3.14159265359)
+        if abs(angle_deg) > 0.1:
+            parts.append(f"rotate({angle_deg:.1f}deg)")
+    return ' '.join(parts) if parts else None
+
+
+def _build_css_ready_section(node_details: Dict[str, Any]) -> Optional[Dict[str, str]]:
+    """Build complete CSS-ready properties dict from node details.
+    Combines all extracted design properties into CSS shorthand values
+    that AI can directly use for code generation.
+    """
+    css = {}
+    node_opacity = node_details.get('opacity', 1)
+    # Note: CSS opacity applies to the entire element, so we don't fold
+    # node_opacity into individual color values. Instead we set opacity
+    # separately and use fill/stroke opacities only for colors.
+    # Background/Color
+    fills = node_details.get('fills', [])
+    bg_css = _build_css_ready_background(fills, 1.0)
+    if bg_css:
+        if node_details.get('type') == 'TEXT':
+            css['color'] = bg_css
+        else:
+            css['background'] = bg_css
+    # Opacity (applied to entire element by browser)
+    if node_opacity < 1:
+        css['opacity'] = f"{node_opacity}"
+    # Border (don't apply node_opacity to border colors; CSS opacity handles it)
+    border_css = _build_css_ready_border(
+        node_details.get('strokes'),
+        node_details.get('cornerRadius'),
+        1.0
+    )
+    if border_css:
+        css.update(border_css)
+    # Shadow & Blur (shadows are rendered outside opacity context, so apply node_opacity)
+    shadow_css = _build_css_ready_shadow(
+        node_details.get('effects'),
+        node_opacity
+    )
+    if shadow_css:
+        css.update(shadow_css)
+    # Layout
+    layout_css = _build_css_ready_layout(
+        node_details.get('autoLayout'),
+        node_details.get('bounds'),
+        node_details.get('sizeConstraints')
+    )
+    if layout_css:
+        css.update(layout_css)
+    # Typography
+    typography_css = _build_css_ready_typography(
+        node_details.get('text')
+    )
+    if typography_css:
+        css.update(typography_css)
+    # Transform
+    transform = node_details.get('transform', {})
+    transform_css = _transform_to_css_from_details(transform)
+    if transform_css:
+        css['transform'] = transform_css
+    # Overflow
+    if node_details.get('clipsContent'):
+        css['overflow'] = 'hidden'
+    # Blend mode
+    blend_mode = node_details.get('blendMode')
+    if blend_mode:
+        css_blend = _blend_mode_to_css(blend_mode)
+        if css_blend:
+            css['mix-blend-mode'] = css_blend
+    return css if css else None
 
 
 def _text_case_to_swiftui(text_case: str) -> Optional[str]:
@@ -4718,7 +5037,13 @@ async def figma_get_node_details(params: FigmaNodeInput) -> str:
             for fill in node_details['fills']:
                 fill_type = fill.get('fillType', 'SOLID')
                 if fill_type == 'SOLID':
-                    lines.append(f"- **Solid:** {fill.get('color')} (opacity: {fill.get('opacity', 1):.2f})")
+                    fill_op = fill.get('opacity', 1)
+                    node_op = node_details.get('opacity', 1)
+                    effective_op = fill_op * node_op
+                    opacity_info = f"opacity: {fill_op:.2f}"
+                    if node_op < 1:
+                        opacity_info += f" × node:{node_op:.2f} = effective:{effective_op:.2f}"
+                    lines.append(f"- **Solid:** {fill.get('color')} ({opacity_info})")
                 elif fill_type.startswith('GRADIENT_'):
                     gradient = fill.get('gradient', {})
                     stops = gradient.get('stops', [])
@@ -4733,20 +5058,32 @@ async def figma_get_node_details(params: FigmaNodeInput) -> str:
                 elif fill_type == 'IMAGE':
                     image = fill.get('image', {})
                     lines.append(f"- **Image:** ref={image.get('imageRef')}, scale={image.get('scaleMode')}")
+            bg_css = _build_css_ready_background(node_details['fills'], 1.0)
+            if bg_css:
+                prop_name = 'color' if node_details.get('type') == 'TEXT' else 'background'
+                lines.append(f"- **CSS:** `{prop_name}: {bg_css};`")
             lines.append("")
 
         # Strokes
         if 'strokes' in node_details:
             s = node_details['strokes']
+            weight = s['weight']
+            dashes = s.get('dashes', [])
+            style = 'dashed' if dashes else 'solid'
             lines.append("## Strokes")
-            lines.append(f"- **Weight:** {s['weight']}px")
+            lines.append(f"- **Weight:** {weight}px")
             lines.append(f"- **Align:** {s['align']}")
             lines.append(f"- **Cap:** {s['cap']}, **Join:** {s['join']}")
-            if s.get('dashes'):
-                lines.append(f"- **Dashes:** {s['dashes']}")
+            if dashes:
+                lines.append(f"- **Dashes:** {dashes}")
+            if s.get('individualWeights'):
+                iw = s['individualWeights']
+                lines.append(f"- **Individual Weights:** T:{iw.get('top', weight)} R:{iw.get('right', weight)} B:{iw.get('bottom', weight)} L:{iw.get('left', weight)}")
             for color in s.get('colors', []):
                 if color.get('type') == 'SOLID':
-                    lines.append(f"- **Color:** {color.get('color')}")
+                    hex_c = color.get('hex', color.get('color'))
+                    lines.append(f"- **Color:** {hex_c}")
+                    lines.append(f"  - `border: {weight}px {style} {hex_c};`")
                 elif color.get('type', '').startswith('GRADIENT_'):
                     lines.append(f"- **Gradient stroke**")
             lines.append("")
@@ -4754,15 +5091,21 @@ async def figma_get_node_details(params: FigmaNodeInput) -> str:
         # Corner radius
         if 'cornerRadius' in node_details:
             cr = node_details['cornerRadius']
+            tl = int(cr.get('topLeft', 0))
+            tr = int(cr.get('topRight', 0))
+            br = int(cr.get('bottomRight', 0))
+            bl = int(cr.get('bottomLeft', 0))
             if cr.get('isUniform'):
-                lines.append(f"## Border Radius: {cr['topLeft']}px\n")
+                css_val = f"{tl}px"
+            else:
+                css_val = f"{tl}px {tr}px {br}px {bl}px"
+            if cr.get('isUniform'):
+                lines.append(f"## Border Radius: {tl}px → `border-radius: {css_val}`\n")
             else:
                 lines.extend([
                     "## Border Radius",
-                    f"- **Top Left:** {cr['topLeft']}px",
-                    f"- **Top Right:** {cr['topRight']}px",
-                    f"- **Bottom Right:** {cr['bottomRight']}px",
-                    f"- **Bottom Left:** {cr['bottomLeft']}px",
+                    f"- **Top Left:** {tl}px, **Top Right:** {tr}px, **Bottom Right:** {br}px, **Bottom Left:** {bl}px",
+                    f"- `border-radius: {css_val}`",
                     ""
                 ])
 
@@ -4777,26 +5120,49 @@ async def figma_get_node_details(params: FigmaNodeInput) -> str:
                         f"offset ({offset['x']}, {offset['y']}), "
                         f"blur {shadow['radius']}px, spread {shadow['spread']}px"
                     )
+                    inset = 'inset ' if shadow['type'] == 'INNER_SHADOW' else ''
+                    ox = int(offset.get('x', 0))
+                    oy = int(offset.get('y', 0))
+                    r = int(shadow['radius'])
+                    sp = int(shadow['spread'])
+                    lines.append(
+                        f"  - `box-shadow: {inset}{ox}px {oy}px {r}px {sp}px {shadow.get('hex', shadow['color'])};`"
+                    )
             if node_details['effects'].get('blurs'):
                 for blur in node_details['effects']['blurs']:
                     lines.append(f"- **{blur['type']}:** {blur['radius']}px")
+                    if blur['type'] == 'LAYER_BLUR':
+                        lines.append(f"  - `filter: blur({int(blur['radius'])}px);`")
+                    elif blur['type'] == 'BACKGROUND_BLUR':
+                        lines.append(f"  - `backdrop-filter: blur({int(blur['radius'])}px);`")
             lines.append("")
 
         # Auto-layout
         if 'autoLayout' in node_details:
             al = node_details['autoLayout']
+            mode = al['mode']
+            direction = 'row' if mode == 'HORIZONTAL' else 'column'
+            p = al['padding']
+            t, r, b, l = int(p['top']), int(p['right']), int(p['bottom']), int(p['left'])
+            if t == r == b == l:
+                padding_css = f"{t}px" if t > 0 else "0"
+            elif t == b and r == l:
+                padding_css = f"{t}px {r}px"
+            else:
+                padding_css = f"{t}px {r}px {b}px {l}px"
+            align_map = {'MIN': 'flex-start', 'CENTER': 'center', 'MAX': 'flex-end', 'SPACE_BETWEEN': 'space-between'}
             lines.extend([
                 "## Auto Layout",
-                f"- **Direction:** {al['mode']}",
-                f"- **Gap:** {al['gap']}px",
-                f"- **Padding:** T:{al['padding']['top']} R:{al['padding']['right']} B:{al['padding']['bottom']} L:{al['padding']['left']}",
-                f"- **Primary Align:** {al['primaryAxisAlign']}",
-                f"- **Counter Align:** {al['counterAxisAlign']}",
+                f"- **Direction:** {mode} → `flex-direction: {direction}`",
+                f"- **Gap:** {al['gap']}px → `gap: {int(al['gap'])}px`",
+                f"- **Padding:** T:{t} R:{r} B:{b} L:{l} → `padding: {padding_css}`",
+                f"- **Primary Align:** {al['primaryAxisAlign']} → `justify-content: {align_map.get(al['primaryAxisAlign'], 'flex-start')}`",
+                f"- **Counter Align:** {al['counterAxisAlign']} → `align-items: {align_map.get(al['counterAxisAlign'], 'flex-start')}`",
                 f"- **Primary Sizing:** {al['primaryAxisSizing']}",
                 f"- **Counter Sizing:** {al['counterAxisSizing']}",
             ])
             if al.get('layoutWrap') != 'NO_WRAP':
-                lines.append(f"- **Wrap:** {al['layoutWrap']}")
+                lines.append(f"- **Wrap:** {al['layoutWrap']} → `flex-wrap: wrap`")
             lines.append("")
 
         # Constraints
@@ -4887,6 +5253,26 @@ async def figma_get_node_details(params: FigmaNodeInput) -> str:
                 lines.append(f"- **Decoration:** {txt['textDecoration']}")
             if txt.get('textAutoResize'):
                 lines.append(f"- **Auto Resize:** {txt['textAutoResize']}")
+            if txt.get('fontFamily') and txt.get('fontSize'):
+                w = int(txt.get('fontWeight', 400))
+                sz = int(txt['fontSize'])
+                lh = f"/{int(txt['lineHeight'])}px" if txt.get('lineHeight') else ''
+                fam = txt['fontFamily']
+                lines.append(f"- **CSS:** `font: {w} {sz}px{lh} '{fam}', sans-serif;`")
+            lines.append("")
+
+        # CSS Ready Section
+        css_ready = _build_css_ready_section(node_details)
+        if css_ready:
+            lines.append("## CSS Ready")
+            lines.append("```css")
+            css_props = {k: v for k, v in css_ready.items() if not k.endswith('-note')}
+            for prop, value in css_props.items():
+                lines.append(f"  {prop}: {value};")
+            lines.append("```")
+            notes = {k: v for k, v in css_ready.items() if k.endswith('-note')}
+            for note_key, note_value in notes.items():
+                lines.append(f"> Note: {note_value}")
             lines.append("")
 
         # Implementation Hints
