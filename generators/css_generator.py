@@ -9,12 +9,9 @@ hyperlinks, line clamping, paragraph spacing, and design-token variables.
 
 from typing import Dict, Any, List, Literal
 
-# Import shared constants from base module
-from generators.base import MAX_CHILDREN_LIMIT
-
-# Import helper functions from the main figma_mcp module.
-# These will be migrated to generators.base in a future task.
-from figma_mcp import (
+# Import shared constants and CSS helpers from base module
+from generators.base import (
+    MAX_CHILDREN_LIMIT,
     _get_background_css,
     _extract_stroke_data,
     _extract_effects_data,

@@ -455,3 +455,371 @@ def parse_style_bundle(node: Dict[str, Any]) -> StyleBundle:
         height=bbox.get('height', 0),
         clips_content=node.get('clipsContent', False)
     )
+
+
+# ---------------------------------------------------------------------------
+# CSS-oriented helpers (shared by React, Vue, CSS generators)
+# ---------------------------------------------------------------------------
+# These were originally in figma_mcp.py and are duplicated here to break
+# circular imports.  The figma_mcp copies remain for its own internal use.
+
+import re as _re
+
+
+def _rgb_to_hsl(r: int, g: int, b: int) -> Tuple[int, int, int]:
+    """Convert RGB (0-255) to HSL (h: 0-360, s: 0-100, l: 0-100)."""
+    r2, g2, b2 = r / 255, g / 255, b / 255
+    max_c, min_c = max(r2, g2, b2), min(r2, g2, b2)
+    l = (max_c + min_c) / 2
+
+    if max_c == min_c:
+        h = s = 0.0
+    else:
+        d = max_c - min_c
+        s = d / (2 - max_c - min_c) if l > 0.5 else d / (max_c + min_c)
+        if max_c == r2:
+            h = (g2 - b2) / d + (6 if g2 < b2 else 0)
+        elif max_c == g2:
+            h = (b2 - r2) / d + 2
+        else:
+            h = (r2 - g2) / d + 4
+        h /= 6
+
+    return (round(h * 360), round(s * 100), round(l * 100))
+
+
+def _calculate_luminance(r: int, g: int, b: int) -> float:
+    """Calculate relative luminance for WCAG contrast ratio (0-255 RGB values)."""
+    def adjust(c: int) -> float:
+        c2 = c / 255
+        return c2 / 12.92 if c2 <= 0.03928 else ((c2 + 0.055) / 1.055) ** 2.4
+    return 0.2126 * adjust(r) + 0.7152 * adjust(g) + 0.0722 * adjust(b)
+
+
+def _contrast_ratio(color1_rgb: tuple, color2_rgb: tuple) -> float:
+    """Calculate WCAG contrast ratio between two colors (RGB tuples 0-255)."""
+    l1 = _calculate_luminance(*color1_rgb)
+    l2 = _calculate_luminance(*color2_rgb)
+    lighter, darker = max(l1, l2), min(l1, l2)
+    return round((lighter + 0.05) / (darker + 0.05), 2)
+
+
+def _calculate_gradient_angle(handle_positions: List[Dict[str, float]]) -> float:
+    """Calculate gradient angle from Figma handle positions."""
+    if not handle_positions or len(handle_positions) < 2:
+        return 0
+    start = handle_positions[0]
+    end = handle_positions[1]
+    dx = end.get('x', 0) - start.get('x', 0)
+    dy = end.get('y', 0) - start.get('y', 0)
+    angle = math.degrees(math.atan2(dy, dx))
+    css_angle = 90 - angle
+    return round(css_angle, 2)
+
+
+# Underscore-prefixed aliases matching the names used by generators
+def _rgba_to_hex(color: Dict[str, float]) -> str:
+    """Convert Figma RGBA color to hex."""
+    return rgba_to_hex(color)
+
+
+def _hex_to_rgb(hex_color: str) -> Tuple[int, int, int]:
+    """Convert hex color string to (R, G, B) tuple (0-255)."""
+    return hex_to_rgb(hex_color)
+
+
+def _extract_gradient_stops(gradient_stops: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Extract gradient color stops."""
+    stops = []
+    for stop in gradient_stops:
+        color = stop.get('color', {})
+        stops.append({
+            'position': round(stop.get('position', 0), 4),
+            'color': rgba_to_hex(color),
+            'opacity': color.get('a', 1)
+        })
+    return stops
+
+
+def _extract_stroke_data(node: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """Extract comprehensive stroke data."""
+    strokes = node.get('strokes', [])
+    if not strokes:
+        return None
+
+    stroke_colors = []
+    for stroke in strokes:
+        if stroke.get('visible', True):
+            stroke_type = stroke.get('type', 'SOLID')
+            stroke_data: Dict[str, Any] = {
+                'type': stroke_type,
+                'opacity': stroke.get('opacity', 1),
+                'blendMode': stroke.get('blendMode', 'NORMAL')
+            }
+            if stroke_type == 'SOLID':
+                hex_color = rgba_to_hex(stroke.get('color', {}))
+                stroke_data['hex'] = hex_color
+                stroke_data['color'] = hex_color
+                rgb = hex_to_rgb(hex_color)
+                hsl = _rgb_to_hsl(*rgb)
+                stroke_data['rgb'] = f"{rgb[0]}, {rgb[1]}, {rgb[2]}"
+                stroke_data['hsl'] = f"{hsl[0]}, {hsl[1]}%, {hsl[2]}%"
+                stroke_data['contrast'] = {
+                    'white': _contrast_ratio(rgb, (255, 255, 255)),
+                    'black': _contrast_ratio(rgb, (0, 0, 0))
+                }
+            elif stroke_type.startswith('GRADIENT_'):
+                stroke_data['gradient'] = {
+                    'type': stroke_type.replace('GRADIENT_', ''),
+                    'stops': _extract_gradient_stops(stroke.get('gradientStops', [])),
+                    'handlePositions': stroke.get('gradientHandlePositions', [])
+                }
+            stroke_colors.append(stroke_data)
+
+    individual_weights: Dict[str, Any] = {}
+    for side, key in [('top', 'strokeTopWeight'), ('right', 'strokeRightWeight'),
+                       ('bottom', 'strokeBottomWeight'), ('left', 'strokeLeftWeight')]:
+        if key in node:
+            individual_weights[side] = node[key]
+
+    result: Dict[str, Any] = {
+        'colors': stroke_colors,
+        'weight': node.get('strokeWeight', 1),
+        'align': node.get('strokeAlign', 'INSIDE'),
+        'cap': node.get('strokeCap', 'NONE'),
+        'join': node.get('strokeJoin', 'MITER'),
+        'miterLimit': node.get('strokeMiterLimit', 4),
+        'dashes': node.get('strokeDashes', []),
+        'dashCap': node.get('strokeDashCap', 'NONE')
+    }
+    if individual_weights:
+        result['individualWeights'] = individual_weights
+    return result
+
+
+def _extract_effects_data(node: Dict[str, Any]) -> Dict[str, Any]:
+    """Extract all effects (shadows, blurs) from a node."""
+    effects = node.get('effects', [])
+    shadows = []
+    blurs = []
+
+    for effect in effects:
+        if not effect.get('visible', True):
+            continue
+        effect_type = effect.get('type', '')
+        if effect_type in ['DROP_SHADOW', 'INNER_SHADOW']:
+            color = effect.get('color', {})
+            offset = effect.get('offset', {'x': 0, 'y': 0})
+            hex_color = rgba_to_hex(color)
+            rgb = hex_to_rgb(hex_color)
+            hsl = _rgb_to_hsl(*rgb)
+            shadows.append({
+                'type': effect_type,
+                'hex': hex_color,
+                'color': hex_color,
+                'rgb': f"{rgb[0]}, {rgb[1]}, {rgb[2]}",
+                'hsl': f"{hsl[0]}, {hsl[1]}%, {hsl[2]}%",
+                'contrast': {
+                    'white': _contrast_ratio(rgb, (255, 255, 255)),
+                    'black': _contrast_ratio(rgb, (0, 0, 0))
+                },
+                'offset': {
+                    'x': offset.get('x', 0),
+                    'y': offset.get('y', 0)
+                },
+                'radius': effect.get('radius', 0),
+                'spread': effect.get('spread', 0),
+                'blendMode': effect.get('blendMode', 'NORMAL'),
+                'showShadowBehindNode': effect.get('showShadowBehindNode', False)
+            })
+        elif effect_type in ['LAYER_BLUR', 'BACKGROUND_BLUR']:
+            blurs.append({
+                'type': effect_type,
+                'radius': effect.get('radius', 0)
+            })
+
+    return {
+        'shadows': shadows if shadows else None,
+        'blurs': blurs if blurs else None
+    }
+
+
+def _gradient_to_css(fill: Dict[str, Any]) -> Optional[str]:
+    """Convert Figma gradient fill to CSS gradient string."""
+    fill_type = fill.get('type', '')
+    if 'GRADIENT' not in fill_type:
+        return None
+    gradient_stops = fill.get('gradientStops', [])
+    if not gradient_stops:
+        return None
+    stops_css = []
+    for stop in gradient_stops:
+        color = stop.get('color', {})
+        position = stop.get('position', 0)
+        hex_color = rgba_to_hex(color)
+        alpha = color.get('a', 1)
+        if alpha < 1:
+            r = int(color.get('r', 0) * 255)
+            g = int(color.get('g', 0) * 255)
+            b = int(color.get('b', 0) * 255)
+            stops_css.append(f"rgba({r}, {g}, {b}, {alpha:.2f}) {int(position * 100)}%")
+        else:
+            stops_css.append(f"{hex_color} {int(position * 100)}%")
+    stops_str = ', '.join(stops_css)
+    if fill_type == 'GRADIENT_LINEAR':
+        handle_positions = fill.get('gradientHandlePositions', [])
+        angle = _calculate_gradient_angle(handle_positions)
+        return f"linear-gradient({int(angle)}deg, {stops_str})"
+    elif fill_type == 'GRADIENT_RADIAL':
+        return f"radial-gradient(circle, {stops_str})"
+    elif fill_type == 'GRADIENT_ANGULAR':
+        return f"conic-gradient({stops_str})"
+    elif fill_type == 'GRADIENT_DIAMOND':
+        return f"radial-gradient(ellipse, {stops_str})"
+    return None
+
+
+def _get_single_fill_css(fill: Dict[str, Any]) -> Optional[str]:
+    """Convert a single fill to CSS value."""
+    if not fill.get('visible', True):
+        return None
+    fill_type = fill.get('type', '')
+    if fill_type == 'SOLID':
+        color = fill.get('color', {})
+        opacity = fill.get('opacity', 1)
+        hex_color = rgba_to_hex(color)
+        if opacity < 1:
+            r = int(color.get('r', 0) * 255)
+            g = int(color.get('g', 0) * 255)
+            b = int(color.get('b', 0) * 255)
+            return f"rgba({r}, {g}, {b}, {opacity:.2f})"
+        return hex_color
+    elif 'GRADIENT' in fill_type:
+        gradient_css = _gradient_to_css(fill)
+        if gradient_css:
+            return gradient_css
+    elif fill_type == 'IMAGE':
+        image_ref = fill.get('imageRef', '')
+        scale_mode = fill.get('scaleMode', 'FILL')
+        if scale_mode == 'FILL':
+            return f"url(/* imageRef: {image_ref} */) center/cover no-repeat"
+        elif scale_mode == 'FIT':
+            return f"url(/* imageRef: {image_ref} */) center/contain no-repeat"
+        elif scale_mode == 'TILE':
+            return f"url(/* imageRef: {image_ref} */) repeat"
+        else:
+            return f"url(/* imageRef: {image_ref} */)"
+    return None
+
+
+def _get_background_css(node: Dict[str, Any]) -> tuple:
+    """Extract background CSS (color or gradient) from node fills.
+
+    Returns:
+        tuple: (background_value, background_type)
+    """
+    fills = node.get('fills', [])
+    if not fills:
+        return None, None
+    css_values = []
+    fill_types = []
+    for fill in fills:
+        css_value = _get_single_fill_css(fill)
+        if css_value:
+            css_values.append(css_value)
+            ft = fill.get('type', 'SOLID')
+            if 'GRADIENT' in ft:
+                fill_types.append('gradient')
+            elif ft == 'IMAGE':
+                fill_types.append('image')
+            else:
+                fill_types.append('color')
+    if not css_values:
+        return None, None
+    if len(css_values) == 1:
+        return css_values[0], fill_types[0]
+    css_values.reverse()
+    fill_types.reverse()
+    return ', '.join(css_values), 'layered'
+
+
+def _corner_radii_to_css(node: Dict[str, Any]) -> str:
+    """Convert Figma corner radii to CSS border-radius."""
+    if 'rectangleCornerRadii' in node:
+        radii = node['rectangleCornerRadii']
+        if len(radii) == 4:
+            tl, tr, br, bl = radii
+            if tl == tr == br == bl:
+                return f"{int(tl)}px"
+            return f"{int(tl)}px {int(tr)}px {int(br)}px {int(bl)}px"
+    corner_radius = node.get('cornerRadius', 0)
+    if corner_radius:
+        return f"{int(corner_radius)}px"
+    return ""
+
+
+def _transform_to_css(node: Dict[str, Any]) -> Optional[str]:
+    """Convert Figma transform properties to CSS transform."""
+    transforms = []
+    rotation = node.get('rotation', 0)
+    if rotation:
+        angle_deg = -rotation * (180 / 3.14159265359)
+        if abs(angle_deg) > 0.1:
+            transforms.append(f"rotate({angle_deg:.1f}deg)")
+    relative_transform = node.get('relativeTransform')
+    if relative_transform and len(relative_transform) >= 2:
+        a = relative_transform[0][0] if len(relative_transform[0]) > 0 else 1
+        b = relative_transform[0][1] if len(relative_transform[0]) > 1 else 0
+        c = relative_transform[1][0] if len(relative_transform[1]) > 0 else 0
+        d = relative_transform[1][1] if len(relative_transform[1]) > 1 else 1
+        scale_x = (a**2 + c**2)**0.5
+        scale_y = (b**2 + d**2)**0.5
+        if abs(scale_x - 1) > 0.01 or abs(scale_y - 1) > 0.01:
+            if abs(scale_x - scale_y) < 0.01:
+                transforms.append(f"scale({scale_x:.2f})")
+            else:
+                transforms.append(f"scale({scale_x:.2f}, {scale_y:.2f})")
+    return ' '.join(transforms) if transforms else None
+
+
+def _blend_mode_to_css(blend_mode: str) -> Optional[str]:
+    """Convert Figma blend mode to CSS mix-blend-mode."""
+    blend_map = {
+        'PASS_THROUGH': None, 'NORMAL': None,
+        'DARKEN': 'darken', 'MULTIPLY': 'multiply',
+        'LINEAR_BURN': 'color-burn', 'COLOR_BURN': 'color-burn',
+        'LIGHTEN': 'lighten', 'SCREEN': 'screen',
+        'LINEAR_DODGE': 'color-dodge', 'COLOR_DODGE': 'color-dodge',
+        'OVERLAY': 'overlay', 'SOFT_LIGHT': 'soft-light',
+        'HARD_LIGHT': 'hard-light', 'DIFFERENCE': 'difference',
+        'EXCLUSION': 'exclusion', 'HUE': 'hue',
+        'SATURATION': 'saturation', 'COLOR': 'color',
+        'LUMINOSITY': 'luminosity'
+    }
+    return blend_map.get(blend_mode)
+
+
+def _text_case_to_css(text_case: str) -> Optional[str]:
+    """Convert Figma textCase to CSS text-transform."""
+    case_map = {
+        'ORIGINAL': None, 'UPPER': 'uppercase',
+        'LOWER': 'lowercase', 'TITLE': 'capitalize',
+        'SMALL_CAPS': None, 'SMALL_CAPS_FORCED': None
+    }
+    return case_map.get(text_case)
+
+
+def _text_decoration_to_css(decoration: str) -> Optional[str]:
+    """Convert Figma textDecoration to CSS text-decoration."""
+    decoration_map = {
+        'NONE': None, 'UNDERLINE': 'underline',
+        'STRIKETHROUGH': 'line-through'
+    }
+    return decoration_map.get(decoration)
+
+
+def _sanitize_token_name(name: str) -> str:
+    """Sanitize token name for use in CSS/SCSS variables and Tailwind config."""
+    sanitized = _re.sub(r'[^a-zA-Z0-9]+', '-', name.lower())
+    sanitized = sanitized.strip('-')
+    return sanitized or 'unnamed'

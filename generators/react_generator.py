@@ -9,16 +9,11 @@ hyperlinks, line clamping, and paragraph spacing.
 
 from typing import Dict, Any, Optional
 
-# Import shared constants from base module
+# Import shared constants and CSS helpers from base module
 from generators.base import (
     TAILWIND_WEIGHT_MAP,
     TAILWIND_ALIGN_MAP,
     MAX_CHILDREN_LIMIT,
-)
-
-# Import helper functions from the main figma_mcp module.
-# These will be migrated to generators.base in a future task.
-from figma_mcp import (
     _get_background_css,
     _extract_stroke_data,
     _extract_effects_data,
