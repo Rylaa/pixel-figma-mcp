@@ -203,8 +203,7 @@ def _swiftui_stroke_modifier(node: Dict[str, Any]) -> str:
         if has_dashes:
             return (f".overlay(\n"
                     f"            RoundedRectangle(cornerRadius: {cr})\n"
-                    f"                .stroke(style: StrokeStyle(lineWidth: {stroke.weight}, dash: [{dash_str}]))\n"
-                    f"                .foregroundColor({color_code})\n"
+                    f"                .stroke({color_code}, style: StrokeStyle(lineWidth: {stroke.weight}, dash: [{dash_str}]))\n"
                     f"        )")
 
         return (f".overlay(\n"
@@ -220,14 +219,12 @@ def _swiftui_stroke_modifier(node: Dict[str, Any]) -> str:
         if has_dashes:
             return (f".overlay(\n"
                     f"            RoundedRectangle(cornerRadius: {cr})\n"
-                    f"                .stroke(style: StrokeStyle(lineWidth: {stroke.weight}, dash: [{dash_str}]))\n"
-                    f"                .foregroundStyle({grad_code})\n"
+                    f"                .stroke({grad_code}, style: StrokeStyle(lineWidth: {stroke.weight}, dash: [{dash_str}]))\n"
                     f"        )")
 
         return (f".overlay(\n"
                 f"            RoundedRectangle(cornerRadius: {cr})\n"
-                f"                .stroke(style: StrokeStyle(lineWidth: {stroke.weight}))\n"
-                f"                .foregroundStyle({grad_code})\n"
+                f"                .stroke({grad_code}, style: StrokeStyle(lineWidth: {stroke.weight}))\n"
                 f"        )")
 
     return ''
@@ -571,11 +568,37 @@ def _swiftui_vector_node(node: Dict[str, Any], indent: int) -> str:
 # Task 6: Container node renderer
 # ---------------------------------------------------------------------------
 
+def _is_icon_container(node: Dict[str, Any]) -> bool:
+    """Check if a container node is likely an icon frame."""
+    name = node.get('name', '')
+    bbox = node.get('absoluteBoundingBox', {})
+    w = bbox.get('width', 0)
+    h = bbox.get('height', 0)
+    if w == 0 or h == 0:
+        return False
+    # Icon library pattern (e.g., "solar:settings-linear", "mdi:heart")
+    has_icon_pattern = ':' in name
+    # Icon size: small, roughly square
+    is_icon_size = 4 <= min(w, h) and max(w, h) <= 128 and max(w, h) / max(min(w, h), 1) <= 2.0
+    # Has vector/boolean children
+    vector_types = {'VECTOR', 'BOOLEAN_OPERATION', 'STAR', 'POLYGON', 'ELLIPSE', 'LINE', 'REGULAR_POLYGON'}
+    has_vector_children = any(c.get('type') in vector_types for c in node.get('children', []))
+    return has_icon_pattern or (is_icon_size and has_vector_children)
+
+
 def _swiftui_container_node(node: Dict[str, Any], indent: int, depth: int) -> str:
     """Generate SwiftUI container (VStack/HStack/ZStack) with recursive children."""
     prefix = ' ' * indent
     lines = []
     children = node.get('children', [])
+
+    # If this container is an icon frame, render as Image instead of recursing
+    if _is_icon_container(node):
+        name = node.get('name', 'icon')
+        sf_symbol = map_icon_name(name)
+        bbox = node.get('absoluteBoundingBox', {})
+        w, h = int(bbox.get('width', 24)), int(bbox.get('height', 24))
+        return f'{prefix}Image(systemName: "{sf_symbol}") // {name}\n{prefix}    .frame(width: {w}, height: {h})'
 
     # Determine container type from layout mode
     layout_mode = node.get('layoutMode')
@@ -612,7 +635,7 @@ def _swiftui_container_node(node: Dict[str, Any], indent: int, depth: int) -> st
 
     # Detect horizontal overflow → wrap in ScrollView(.horizontal)
     needs_scroll = False
-    if container == 'HStack' and node.get('clipsContent', False):
+    if container == 'HStack':
         container_bbox = node.get('absoluteBoundingBox', {})
         container_w = container_bbox.get('width', 0)
         if container_w > 0:
