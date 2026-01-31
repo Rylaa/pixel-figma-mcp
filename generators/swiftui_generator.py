@@ -248,35 +248,34 @@ def _swiftui_corner_modifier(node: Dict[str, Any]) -> str:
 
 
 def _swiftui_effects_modifier(node: Dict[str, Any]) -> list[str]:
-    """Generate SwiftUI shadow and blur modifiers."""
-    effects_data = parse_effects(node)
+    """Generate shadow and blur effect modifiers including background blur."""
+    shadows, blurs = parse_effects(node)
     modifiers = []
 
-    shadows = effects_data.get('shadows') or []
-    blurs = effects_data.get('blurs') or []
-
     for shadow in shadows:
-        if shadow.get('type') == 'DROP_SHADOW':
-            color = shadow.get('hex', '#000000')
-            rgb = hex_to_rgb(color)
-            offset = shadow.get('offset', {'x': 0, 'y': 0})
-            radius = shadow.get('radius', 0)
-            opacity = shadow.get('opacity', 0.25)
+        c = shadow.color
+        r, g, b = c.rgb_ints
+        if shadow.type == 'DROP_SHADOW':
             modifiers.append(
-                f".shadow(color: Color(red: {rgb[0]/255:.3f}, green: {rgb[1]/255:.3f}, blue: {rgb[2]/255:.3f}).opacity({opacity:.2f}), "
-                f"radius: {int(radius)}, x: {int(offset.get('x', 0))}, y: {int(offset.get('y', 0))})"
+                f".shadow(color: Color(red: {r/255:.3f}, green: {g/255:.3f}, blue: {b/255:.3f}).opacity({c.a:.2f}), "
+                f"radius: {int(shadow.radius)}, x: {int(shadow.offset_x)}, y: {int(shadow.offset_y)})"
             )
-        elif shadow.get('type') == 'INNER_SHADOW':
-            # SwiftUI doesn't have native inner shadow - use overlay approach
-            modifiers.append(f"// Inner shadow: use .overlay with inverted mask")
+        elif shadow.type == 'INNER_SHADOW':
+            # Inner shadow approximation using overlay
+            modifiers.append(
+                f".overlay(\n"
+                f"            RoundedRectangle(cornerRadius: 0)\n"
+                f"                .stroke(Color(red: {r/255:.3f}, green: {g/255:.3f}, blue: {b/255:.3f}).opacity({c.a:.2f}), lineWidth: {int(shadow.radius)})\n"
+                f"                .blur(radius: {int(shadow.radius)})\n"
+                f"                .clipShape(RoundedRectangle(cornerRadius: 0))\n"
+                f"        )"
+            )
 
     for blur in blurs:
-        blur_type = blur.get('type', '')
-        radius = blur.get('radius', 0)
-        if blur_type == 'LAYER_BLUR':
-            modifiers.append(f".blur(radius: {int(radius)})")
-        elif blur_type == 'BACKGROUND_BLUR':
-            modifiers.append(f"// Background blur: use .background(.ultraThinMaterial)")
+        if blur.type == 'LAYER_BLUR':
+            modifiers.append(f".blur(radius: {int(blur.radius)})")
+        elif blur.type == 'BACKGROUND_BLUR':
+            modifiers.append(".background(.ultraThinMaterial)")
 
     return modifiers
 
@@ -610,18 +609,21 @@ def _swiftui_container_node(node: Dict[str, Any], indent: int, depth: int) -> st
     # Open container
     lines.append(f'{prefix}{container}({params_str}) {{')
 
+    # Filter visible children for SPACE_BETWEEN logic
+    visible_children = [c for c in children if c.get('visible', True)]
+
     # Render children recursively
     child_count = 0
-    for child in children:
+    for i, child in enumerate(visible_children):
         if child_count >= MAX_NATIVE_CHILDREN_LIMIT:
-            lines.append(f'{prefix}    // ... {len(children) - MAX_NATIVE_CHILDREN_LIMIT} more children truncated')
+            lines.append(f'{prefix}    // ... {len(visible_children) - MAX_NATIVE_CHILDREN_LIMIT} more children truncated')
             break
-        if not child.get('visible', True):
-            continue
         child_code = _generate_swiftui_node(child, indent + 4, depth + 1)
         if child_code:
             lines.append(child_code)
             child_count += 1
+            if primary_align == 'SPACE_BETWEEN' and i < len(visible_children) - 1:
+                lines.append(f'{prefix}    Spacer()')
 
     # Close container
     lines.append(f'{prefix}}}')
