@@ -98,6 +98,8 @@ ICON_NAME_MAP = {
     'shield': 'shield', 'security': 'shield',
     'key': 'key',
     'focus': 'viewfinder', 'focus-mode': 'viewfinder', 'scope': 'viewfinder',
+    'goal': 'scope', 'target': 'scope', 'aim': 'scope', 'bullseye': 'scope',
+    'sparkle': 'sparkles', 'sparkles': 'sparkles', 'stars': 'sparkles', 'magic': 'sparkles', 'ai': 'sparkles', 'wand': 'wand.and.stars',
     'button': 'rectangle.on.rectangle', 'button-solid': 'rectangle.on.rectangle',
     'logout': 'rectangle.portrait.and.arrow.right', 'signout': 'rectangle.portrait.and.arrow.right',
     'login': 'rectangle.portrait.and.arrow.forward', 'signin': 'rectangle.portrait.and.arrow.forward',
@@ -148,8 +150,9 @@ def map_icon_name(figma_name: str) -> str:
         clean = clean.split(':')[-1]
     elif '/' in clean:
         clean = clean.split('/')[-1]
-    # Remove common suffixes
+    # Remove common suffixes (style variants and size)
     clean = re.sub(r'[-_](linear|outline|filled|bold|solid|regular|light|thin|duotone|broken)$', '', clean, flags=re.IGNORECASE)
+    clean = re.sub(r'[-_]\d+$', '', clean)  # Remove size suffixes like -16, -24, -32
     clean = clean.lower().strip().replace('_', '-').replace(' ', '-')
 
     # Direct match

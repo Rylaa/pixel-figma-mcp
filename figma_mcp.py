@@ -139,7 +139,7 @@ MAX_NATIVE_CHILDREN_LIMIT = 10  # Limit for SwiftUI/Kotlin to avoid excessive co
 # Initialize MCP Server
 # ============================================================================
 
-SERVER_VERSION = "3.2.12"
+SERVER_VERSION = "3.2.13"
 
 mcp = FastMCP("figma_mcp")
 

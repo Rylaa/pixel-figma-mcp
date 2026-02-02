@@ -1406,8 +1406,47 @@ def generate_swiftui_code(node: Dict[str, Any], component_name: str = '') -> str
             if children_total_w > root_w * 1.05:
                 root_needs_scroll = True
 
+    # Detect mobile frame pattern for vertical ScrollView
+    # Mobile frames: width 375-430, height > 900, or tall aspect ratio
+    mobile_needs_vscroll = False
+    is_mobile_width = 375 <= root_w <= 430
+    is_tall_content = root_h > 900
+    aspect_ratio = root_h / root_w if root_w > 0 else 0
+    is_tall_aspect = aspect_ratio > 2.5
+
+    # If ZStack was chosen but frame is mobile + tall → use ScrollView + VStack instead
+    if container == 'ZStack' and is_mobile_width and (is_tall_content or is_tall_aspect):
+        mobile_needs_vscroll = True
+        # Override: convert ZStack to VStack for scrollable mobile UI
+        container = 'VStack'
+        alignment = '.leading'
+        params = []
+        if alignment != '.center':
+            params.append(f"alignment: {alignment}")
+        if gap:
+            params.append(f"spacing: {int(gap)}")
+        params_str = ', '.join(params)
+        # Regenerate children without offsets
+        children_lines = []
+        child_count = 0
+        for child in visible_children:
+            if child_count >= MAX_NATIVE_CHILDREN_LIMIT:
+                children_lines.append(f'            // ... {len(visible_children) - MAX_NATIVE_CHILDREN_LIMIT} more children truncated')
+                break
+            child_code = _generate_swiftui_node(child, indent=12, depth=1, parent_node=node)
+            if child_code:
+                children_lines.append(child_code)
+                child_count += 1
+        children_code = '\n'.join(children_lines) if children_lines else '            // Content'
+
     if root_needs_scroll:
         body_content = f"""ScrollView(.horizontal, showsIndicators: false) {{
+            {container}({params_str}) {{
+{children_code}
+            }}
+        }}"""
+    elif mobile_needs_vscroll:
+        body_content = f"""ScrollView(showsIndicators: false) {{
             {container}({params_str}) {{
 {children_code}
             }}
