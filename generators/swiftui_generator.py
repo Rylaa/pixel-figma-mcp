@@ -62,9 +62,14 @@ def _swiftui_fill_modifier(node: Dict[str, Any]) -> tuple[str, str]:
     if not fill_layers:
         return '', ''
 
+    # Get node dimensions for gradient sizing
+    bbox = node.get('absoluteBoundingBox', {})
+    node_width = bbox.get('width', 0)
+    node_height = bbox.get('height', 0)
+
     # Single fill - simple background
     if len(fill_layers) == 1:
-        code, grad_def = _fill_layer_to_swiftui(fill_layers[0])
+        code, grad_def = _fill_layer_to_swiftui(fill_layers[0], node_width, node_height)
         if code:
             return f'.background({code})', grad_def
         return '', ''
@@ -73,7 +78,7 @@ def _swiftui_fill_modifier(node: Dict[str, Any]) -> tuple[str, str]:
     bg_parts = []
     grad_defs = []
     for layer in fill_layers:  # Figma fills are bottom-to-top; ZStack renders last-on-top
-        code, grad_def = _fill_layer_to_swiftui(layer)
+        code, grad_def = _fill_layer_to_swiftui(layer, node_width, node_height)
         if code:
             bg_parts.append(code)
             if grad_def:
@@ -95,7 +100,7 @@ def _swiftui_fill_modifier(node: Dict[str, Any]) -> tuple[str, str]:
     return modifier, '\n'.join(grad_defs)
 
 
-def _fill_layer_to_swiftui(layer: FillLayer) -> tuple[str, str]:
+def _fill_layer_to_swiftui(layer: FillLayer, node_width: float = 0, node_height: float = 0) -> tuple[str, str]:
     """Convert a single FillLayer to SwiftUI code.
     Returns (view_code, gradient_definition).
     """
@@ -107,7 +112,7 @@ def _fill_layer_to_swiftui(layer: FillLayer) -> tuple[str, str]:
         return color_code, ''
 
     elif layer.gradient:
-        return _gradient_to_swiftui(layer.gradient)
+        return _gradient_to_swiftui(layer.gradient, node_width, node_height)
 
     elif layer.type == 'IMAGE':
         return 'Color.gray.opacity(0.3) // Image placeholder', ''
@@ -115,7 +120,7 @@ def _fill_layer_to_swiftui(layer: FillLayer) -> tuple[str, str]:
     return '', ''
 
 
-def _gradient_to_swiftui(gradient: GradientDef) -> tuple[str, str]:
+def _gradient_to_swiftui(gradient: GradientDef, node_width: float = 0, node_height: float = 0) -> tuple[str, str]:
     """Convert GradientDef to SwiftUI gradient code.
     Returns (gradient_code, gradient_variable_definition).
     """
@@ -134,14 +139,16 @@ def _gradient_to_swiftui(gradient: GradientDef) -> tuple[str, str]:
         code = f"LinearGradient(stops: [{stops_str}], startPoint: {start}, endPoint: {end})"
 
     elif gradient.type == 'RADIAL':
-        code = f"RadialGradient(stops: [{stops_str}], center: .center, startRadius: 0, endRadius: 200)"
+        end_radius = int(max(node_width, node_height) / 2) if (node_width and node_height) else 200
+        code = f"RadialGradient(stops: [{stops_str}], center: .center, startRadius: 0, endRadius: {end_radius})"
 
     elif gradient.type == 'ANGULAR':
         code = f"AngularGradient(stops: [{stops_str}], center: .center)"
 
     elif gradient.type == 'DIAMOND':
         # Approximate as radial
-        code = f"RadialGradient(stops: [{stops_str}], center: .center, startRadius: 0, endRadius: 200)"
+        end_radius = int(max(node_width, node_height) / 2) if (node_width and node_height) else 200
+        code = f"RadialGradient(stops: [{stops_str}], center: .center, startRadius: 0, endRadius: {end_radius})"
 
     else:
         return '', ''

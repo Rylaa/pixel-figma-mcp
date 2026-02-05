@@ -1,5 +1,5 @@
 """Tests for code generator fixes."""
-from generators.base import MAX_CHILDREN_LIMIT, MAX_NATIVE_CHILDREN_LIMIT
+from generators.base import MAX_CHILDREN_LIMIT, MAX_NATIVE_CHILDREN_LIMIT, parse_fills, ColorValue, GradientStop, GradientDef
 from generators.react_generator import generate_react_code
 from generators.css_generator import generate_css_code
 
@@ -152,3 +152,48 @@ class TestInnerShadow:
         code = generate_react_code(node, 'MixedBox', use_tailwind=True)
         # Should have inset for inner, no inset for drop
         assert 'inset' in code.lower(), "Mixed shadows should include 'inset' for INNER_SHADOW"
+
+
+class TestRadialGradientRadius:
+    """Verify radial gradient endRadius scales with dimensions."""
+
+    def test_swiftui_radial_gradient_not_hardcoded_200(self, node_with_radial_gradient):
+        """For a 300x150 node, endRadius should be 150 (max/2), not 200."""
+        from generators.swiftui_generator import _gradient_to_swiftui
+        fills = parse_fills(node_with_radial_gradient)
+        gradient = fills[0].gradient
+        assert gradient is not None
+        assert gradient.type == 'RADIAL'
+
+        # Call with node dimensions
+        code, _ = _gradient_to_swiftui(gradient, node_width=300, node_height=150)
+        assert 'endRadius: 200' not in code, "endRadius should not be hardcoded to 200"
+        assert 'endRadius: 150' in code, "endRadius should be max(300, 150) / 2 = 150"
+
+    def test_swiftui_radial_gradient_square(self):
+        """For a 100x100 node, endRadius should be 50."""
+        from generators.swiftui_generator import _gradient_to_swiftui
+        gradient = GradientDef(
+            type='RADIAL',
+            stops=[
+                GradientStop(color=ColorValue(r=1, g=0, b=0), position=0),
+                GradientStop(color=ColorValue(r=0, g=0, b=1), position=1),
+            ]
+        )
+        code, _ = _gradient_to_swiftui(gradient, node_width=100, node_height=100)
+        assert 'endRadius: 50' in code
+
+    def test_swiftui_radial_gradient_default_fallback(self):
+        """When no dimensions provided, use reasonable default."""
+        from generators.swiftui_generator import _gradient_to_swiftui
+        gradient = GradientDef(
+            type='RADIAL',
+            stops=[
+                GradientStop(color=ColorValue(r=1, g=0, b=0), position=0),
+                GradientStop(color=ColorValue(r=0, g=0, b=1), position=1),
+            ]
+        )
+        code, _ = _gradient_to_swiftui(gradient)  # No dimensions
+        assert 'endRadius:' in code
+        # Default: use 200 as before (backward compat)
+        assert 'endRadius: 200' in code
