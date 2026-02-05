@@ -17,8 +17,8 @@ import re
 # Constants
 # ---------------------------------------------------------------------------
 
-MAX_CHILDREN_LIMIT = 30       # React/Vue/CSS child limit per container
-MAX_NATIVE_CHILDREN_LIMIT = 20  # SwiftUI/Kotlin child limit
+MAX_CHILDREN_LIMIT = 20       # React/Vue/CSS child limit per container
+MAX_NATIVE_CHILDREN_LIMIT = 15  # SwiftUI/Kotlin child limit
 MAX_DEPTH = 12                  # Max recursive depth
 
 # Common Figma icon name patterns → SF Symbols mapping

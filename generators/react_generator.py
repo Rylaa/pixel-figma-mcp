@@ -468,7 +468,7 @@ def recursive_node_to_jsx(
 
         # Recursively add children
         children = node.get('children', [])
-        for child in children[:MAX_CHILDREN_LIMIT]:  # Limit to 20 children for safety
+        for child in children[:MAX_CHILDREN_LIMIT]:  # Safety limit
             child_jsx = recursive_node_to_jsx(child, indent + 2, use_tailwind)
             if child_jsx:
                 lines.append(child_jsx)

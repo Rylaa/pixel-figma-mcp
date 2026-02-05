@@ -33,7 +33,11 @@ from generators.react_generator import generate_react_code as _generate_react_co
 from generators.vue_generator import generate_vue_code as _generate_vue_code
 from generators.css_generator import generate_css_code as _generate_css_code, generate_scss_code as _generate_scss_code
 from generators.kotlin_generator import generate_kotlin_code as _generate_kotlin_code
-from generators.base import sanitize_component_name as _sanitize_component_name
+from generators.base import (
+    sanitize_component_name as _sanitize_component_name,
+    MAX_CHILDREN_LIMIT,
+    MAX_NATIVE_CHILDREN_LIMIT,
+)
 
 
 # ============================================================================
@@ -129,10 +133,6 @@ TAILWIND_ALIGN_MAP = {
     'RIGHT': 'text-right',
     'JUSTIFIED': 'text-justify'
 }
-
-# Max children limit for recursive operations
-MAX_CHILDREN_LIMIT = 20
-MAX_NATIVE_CHILDREN_LIMIT = 10  # Limit for SwiftUI/Kotlin to avoid excessive code
 
 
 # ============================================================================
