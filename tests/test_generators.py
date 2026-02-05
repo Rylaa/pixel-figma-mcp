@@ -1,7 +1,8 @@
 """Tests for code generator fixes."""
-from generators.base import MAX_CHILDREN_LIMIT, MAX_NATIVE_CHILDREN_LIMIT, parse_fills, ColorValue, GradientStop, GradientDef
+from generators.base import MAX_CHILDREN_LIMIT, MAX_NATIVE_CHILDREN_LIMIT, parse_fills, ColorValue, GradientStop, GradientDef, ICON_NAME_MAP
 from generators.react_generator import generate_react_code
 from generators.css_generator import generate_css_code
+import math
 
 
 class TestChildLimitsConsistency:
@@ -197,3 +198,43 @@ class TestRadialGradientRadius:
         assert 'endRadius:' in code
         # Default: use 200 as before (backward compat)
         assert 'endRadius: 200' in code
+
+
+class TestIconNameMapNoDuplicates:
+    """Verify no duplicate keys in ICON_NAME_MAP."""
+
+    def test_trending_maps_to_chart(self):
+        """'trending' should map to chart icon, 'fire'/'hot' should map to flame."""
+        assert ICON_NAME_MAP['trending'] == 'chart.line.uptrend.xyaxis'
+        assert ICON_NAME_MAP['fire'] == 'flame'
+        assert ICON_NAME_MAP['hot'] == 'flame'
+
+
+class TestColorValueHex:
+    """Verify ColorValue.hex returns proper hex string."""
+
+    def test_opaque_color_returns_hex(self):
+        c = ColorValue(r=1.0, g=0.0, b=0.0, a=1.0)
+        assert c.hex == '#ff0000'
+
+    def test_transparent_color_returns_8char_hex(self):
+        """Alpha < 1 should return #RRGGBBAA format, not rgba()."""
+        c = ColorValue(r=1.0, g=0.0, b=0.0, a=0.5)
+        result = c.hex
+        assert result.startswith('#'), f"hex should return # prefix, got: {result}"
+        assert 'rgba' not in result, f"hex should not return rgba(), got: {result}"
+
+    def test_transparent_color_rgba_property(self):
+        """rgba property should return rgba() string."""
+        c = ColorValue(r=1.0, g=0.0, b=0.0, a=0.5)
+        result = c.rgba
+        assert result.startswith('rgba('), f"rgba should return rgba() string, got: {result}"
+
+
+class TestHardcodedPi:
+    """Verify math.pi is used instead of hardcoded value."""
+
+    def test_no_hardcoded_pi_in_base(self):
+        with open('generators/base.py', 'r') as f:
+            source = f.read()
+        assert '3.14159265359' not in source, "Should use math.pi instead of hardcoded value"

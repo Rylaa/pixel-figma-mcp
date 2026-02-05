@@ -93,7 +93,7 @@ ICON_NAME_MAP = {
     'dollar': 'dollarsign.circle', 'money': 'dollarsign.circle',
     'chart': 'chart.bar', 'analytics': 'chart.bar', 'graph': 'chart.bar',
     'trending': 'chart.line.uptrend.xyaxis',
-    'fire': 'flame', 'hot': 'flame', 'trending': 'flame',
+    'fire': 'flame', 'hot': 'flame',
     'bolt': 'bolt', 'lightning': 'bolt', 'flash': 'bolt', 'zap': 'bolt.fill',
     'shield': 'shield', 'security': 'shield',
     'key': 'key',
@@ -208,8 +208,16 @@ class ColorValue:
     def hex(self) -> str:
         ri, gi, bi = int(self.r * 255), int(self.g * 255), int(self.b * 255)
         if self.a < 1:
-            return f"rgba({ri}, {gi}, {bi}, {self.a:.2f})"
+            ai = int(self.a * 255)
+            return f"#{ri:02x}{gi:02x}{bi:02x}{ai:02x}"
         return f"#{ri:02x}{gi:02x}{bi:02x}"
+
+    @property
+    def rgba(self) -> str:
+        ri, gi, bi = int(self.r * 255), int(self.g * 255), int(self.b * 255)
+        if self.a < 1:
+            return f"rgba({ri}, {gi}, {bi}, {self.a:.2f})"
+        return f"rgb({ri}, {gi}, {bi})"
 
     @property
     def rgb_ints(self) -> Tuple[int, int, int]:
@@ -917,7 +925,7 @@ def _transform_to_css(node: Dict[str, Any]) -> Optional[str]:
     transforms = []
     rotation = node.get('rotation', 0)
     if rotation:
-        angle_deg = -rotation * (180 / 3.14159265359)
+        angle_deg = -math.degrees(rotation)
         if abs(angle_deg) > 0.1:
             transforms.append(f"rotate({angle_deg:.1f}deg)")
     relative_transform = node.get('relativeTransform')
